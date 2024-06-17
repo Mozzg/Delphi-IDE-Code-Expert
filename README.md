@@ -1,2 +1,2 @@
-# Delphi-IDE-Code-eXpert
-Delphi IDE plugin for additional features when working with object pascal code
+# Delphi-IDE-Code-Expert
+Delphi IDE plugin for RAD Studio
