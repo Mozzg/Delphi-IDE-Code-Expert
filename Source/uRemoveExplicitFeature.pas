@@ -5,36 +5,22 @@ interface
 uses
   Vcl.Dialogs, System.Classes, System.SysUtils, Vcl.Controls, Vcl.StdCtrls,
   Vcl.Forms, Xml.XMLIntf, System.Variants,
-  uBaseFeature, uHooking, ufmWizardSettings, uWizardSettings;
+  uBaseFeature, uHooking, ufmWizardSettings, uWizardSettings, uFeatureCollection;
 
 type
   TRemoveExplicitPropertyFeature = class(TBaseFeature)
   private
-    FHookEnabled: Boolean;
     FExplicitHook: TRedirectCode;
-    FSettingsCheckBox: TCheckBox;
+    FSettingsCheckBox: TCheckBox;  // Parent will be frame, so no need to free
 
     procedure SettingsCheckBoxClick(Sender: TObject);
   protected
-    function GetFeatureEnabled: Boolean; override;
     procedure SetFeatureEnabled(Value: Boolean); override;
   public
-    constructor CreateFeature(WizardSettings: TWizardSettings); override;
-    destructor Destroy; override;
-
-    procedure InitFeature; override;
     procedure InitFeatureControls(ASettingsForm: TForm); override;
-
-    procedure ReadFeatureSettings(AFeatureSettings: IXMLNode); override;
-    procedure WriteFeatureSettings(AFeatureSettings: IXMLNode); override;
-
-    property FeatureEnabled;
   end;
 
 implementation
-
-uses
-  uFeatureCollection;
 
 type
   TControlEx = class(TControl)
@@ -61,45 +47,23 @@ type
 
 { TRemoveExplicitPropertyFeature }
 
-constructor TRemoveExplicitPropertyFeature.CreateFeature(WizardSettings: TWizardSettings);
-begin
-  inherited CreateFeature(WizardSettings);
-
-  FHookEnabled := False;
-end;
-
-destructor TRemoveExplicitPropertyFeature.Destroy;
-begin
-  inherited Destroy;
-end;
-
 procedure TRemoveExplicitPropertyFeature.SettingsCheckBoxClick(Sender: TObject);
 begin
   FeatureEnabled := (Sender as TCheckBox).Checked;
 end;
 
-function TRemoveExplicitPropertyFeature.GetFeatureEnabled: Boolean;
-begin
-  Result := FHookEnabled;
-end;
-
 procedure TRemoveExplicitPropertyFeature.SetFeatureEnabled(Value: Boolean);
 begin
-  if FHookEnabled = Value then Exit;
+  if FFeatureEnabled = Value then Exit;
 
-  FHookEnabled := Value;
-  if FHookEnabled then
+  FFeatureEnabled := Value;
+  if FFeatureEnabled then
     CodeRedirect(@TOpenControl.DefineProperties, @TControlEx.DefineProperties, FExplicitHook)
   else
     UnhookFunction(FExplicitHook);
 
   if Assigned(FSettingsCheckBox) then
-    FSettingsCheckBox.Checked := FHookEnabled;
-end;
-
-procedure TRemoveExplicitPropertyFeature.InitFeature;
-begin
-  inherited InitFeature;
+    FSettingsCheckBox.Checked := FFeatureEnabled;
 end;
 
 {procedure TRemoveExplicitPropertyFeature.DisableFeature;
@@ -121,24 +85,11 @@ begin
     FSettingsCheckBox.OnClick := SettingsCheckBoxClick;
     FSettingsCheckBox.Checked := FeatureEnabled;
 
+    // Assinging parent to control
     TfmWizardSettings(ASettingsForm).AddSettingsControl('Global', FSettingsCheckBox);
   except
     FreeAndNil(FSettingsCheckBox);
   end;
-end;
-
-procedure TRemoveExplicitPropertyFeature.ReadFeatureSettings(AFeatureSettings: IXMLNode);
-var
-  FeatureEnabledSetting: OleVariant;
-begin
-  FeatureEnabledSetting := AFeatureSettings.Attributes['Enabled'];
-  if not VarIsNull(FeatureEnabledSetting) then
-    FeatureEnabled := FeatureEnabledSetting;
-end;
-
-procedure TRemoveExplicitPropertyFeature.WriteFeatureSettings(AFeatureSettings: IXMLNode);
-begin
-  AFeatureSettings.Attributes['Enabled'] := FeatureEnabled;
 end;
 
 { TControlEx }

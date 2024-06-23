@@ -19,7 +19,8 @@ uses
   uBaseFeature in 'Source\uBaseFeature.pas',
   uWizardSettings in 'Source\uWizardSettings.pas',
   ufmWizardSettings in 'Source\Forms\ufmWizardSettings.pas' {fmWizardSettings},
-  uRemoveExplicitFeature in 'Source\uRemoveExplicitFeature.pas';
+  uRemoveExplicitFeature in 'Source\uRemoveExplicitFeature.pas',
+  uRemoveFormatShortcutFeature in 'Source\uRemoveFormatShortcutFeature.pas';
 
 exports
   InitWizard name WizardEntryPoint;

@@ -122,6 +122,7 @@ $(PreBuildEvent)]]></PreBuildEvent>
             <Form>fmWizardSettings</Form>
         </DCCReference>
         <DCCReference Include="Source\uRemoveExplicitFeature.pas"/>
+        <DCCReference Include="Source\uRemoveFormatShortcutFeature.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>
