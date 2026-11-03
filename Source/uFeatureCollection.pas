@@ -4,6 +4,7 @@ interface
 
 uses
   System.Contnrs, System.SysUtils, System.Rtti, Vcl.Forms, Xml.XMLIntf,
+  Winapi.Windows,
   uWizardConsts, uBaseFeature, uWizardSettings;
 
 type
@@ -22,6 +23,7 @@ type
     procedure InitAllFeatures;
     procedure InitFeaturesControls(ASettingsForm: TForm);
     procedure SaveFeaturesSettings;
+    procedure FinalizeAllFeatures;
   end;
 
 implementation
@@ -113,6 +115,25 @@ begin
       (Feature as TBaseFeature).WriteFeatureSettings(FeatureSettings);
     finally
       FeatureSettings := nil;
+    end;
+  end;
+end;
+
+procedure TFeatureCollection.FinalizeAllFeatures;
+var
+  i: Integer;
+  Feature: TBaseFeature;
+begin
+  // Reverse order, so features are rolled back in the opposite order of their initialization.
+  // IDE is shutting down, so errors are not shown, only reported to the debugger.
+  for i := FFeatureList.Count - 1 downto 0 do
+  begin
+    Feature := FFeatureList.Items[i] as TBaseFeature;
+    try
+      Feature.FinalizeFeature;
+    except
+      on E: Exception do
+        OutputDebugString(PWideChar(WIZARD_NAME + ': error finalizing feature ' + Feature.ClassName + ', message: ' + E.Message));
     end;
   end;
 end;

@@ -15,6 +15,7 @@ type
     class var FSplashTimerHandle: UIntPtr;
   private
     FMenuItemImage: Vcl.Graphics.TBitmap;
+    FDICEMenuItem: TMenuItem;  // Owned by IDE Tools menu, but freed by plugin on unload
     FAboutInfoIndex: Integer;
     FWizardSettings: TWizardSettings;
     FFeatures: TFeatureCollection;
@@ -75,9 +76,7 @@ end;
 
 procedure OnSplashTimer(Wnd: HWND; Msg: Cardinal; IDEvent: Cardinal; Time: DWORD); stdcall;
 begin
-  if not Assigned(Application) then
-    DestroySplashTimer
-  else if Application.Terminated then
+  if TDICEMainApp.FPluginTerminated or not Assigned(Application) or Application.Terminated then
     DestroySplashTimer
   else if (Application.MainForm <> nil) and Application.MainForm.Visible then
   begin
@@ -94,6 +93,8 @@ end;
 
 procedure TerminateWizard;
 begin
+  // First of all, so timer is killed even if plugin is already marked as terminated
+  DestroySplashTimer;
   if TDICEMainApp.FPluginTerminated then Exit;
 
   TDICEMainApp.FPluginTerminated := True;
@@ -144,6 +145,17 @@ destructor TDICEMainApp.Destroy;
 var
   AboutBoxIntf: IOTAAboutBoxServices;
 begin
+  // GetDICEMainApp is not available here (instance is already nil), so nothing below should call it.
+
+  // Menu first, so it can't be clicked while plugin is being destroyed
+  FreeAndNil(FDICEMenuItem);
+
+  // Features must be rolled back and freed before settings, because settings form owns features controls
+  if Assigned(FFeatures) then
+    FFeatures.FinalizeAllFeatures;
+  FreeAndNil(FFeatures);
+  FreeAndNil(FWizardSettings);
+
   try
     if (FAboutInfoIndex <> -1) and Supports(BorlandIDEServices, IOTAAboutBoxServices, AboutBoxIntf) then
       AboutBoxIntf.RemovePluginInfo(FAboutInfoIndex);
@@ -151,9 +163,6 @@ begin
     AboutBoxIntf := nil;
   end;
   FreeAndNil(FMenuItemImage);
-
-  FreeAndNil(FWizardSettings);
-  FreeAndNil(FFeatures);
 
   TDICEMainApp.FPluginTerminated := True;
   inherited Destroy;
@@ -230,7 +239,7 @@ end;
 
 procedure TDICEMainApp.InitAfterIDELoad;
 var
-  ToolsMenuItem, FirstDivider, DICEMenuItem: TMenuItem;
+  ToolsMenuItem, FirstDivider: TMenuItem;
   AppMainMenu: TMainMenu;
   ServicesIntf: INTAServices;
   i, DividerIndex: Integer;
@@ -252,13 +261,13 @@ begin
 
     if Assigned(ToolsMenuItem) then
     begin
-      DICEMenuItem := TMenuItem.Create(ToolsMenuItem);
-      DICEMenuItem.Name := WIZARD_SETTINGS_MENU_ITEM_NAME;
-      DICEMenuItem.Caption := WIZARD_SETTINGS_MENU_ITEM_CAPTION;
-      DICEMenuItem.OnClick := OnClickWizardSettingsMenuItem;
+      FDICEMenuItem := TMenuItem.Create(ToolsMenuItem);
+      FDICEMenuItem.Name := WIZARD_SETTINGS_MENU_ITEM_NAME;
+      FDICEMenuItem.Caption := WIZARD_SETTINGS_MENU_ITEM_CAPTION;
+      FDICEMenuItem.OnClick := OnClickWizardSettingsMenuItem;
 
       if Assigned(FMenuItemImage) then
-        DICEMenuItem.ImageIndex := ServicesIntf.AddImage(WIZARD_ID_STRING + '.ICON', [FMenuItemImage]);
+        FDICEMenuItem.ImageIndex := ServicesIntf.AddImage(WIZARD_ID_STRING + '.ICON', [FMenuItemImage]);
 
       FirstDivider := ToolsMenuItem.Find('-');
       if Assigned(FirstDivider) then
@@ -266,7 +275,7 @@ begin
       else
         DividerIndex := 0;
 
-      ToolsMenuItem.Insert(DividerIndex, DICEMenuItem);
+      ToolsMenuItem.Insert(DividerIndex, FDICEMenuItem);
     end;
   end;
 

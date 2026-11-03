@@ -55,7 +55,10 @@ begin
   end;
 
   //Finding action from PopupMenu
-  FoundComponent := Application.MainForm.FindComponent('mnuFormatSource');
+  if Assigned(Application.MainForm) then
+    FoundComponent := Application.MainForm.FindComponent('mnuFormatSource')
+  else
+    FoundComponent := nil;
   if Assigned(FoundComponent) and (FoundComponent is TMenuItem) then
   begin
     FormatMenuItem := FoundComponent as TMenuItem;
@@ -63,7 +66,17 @@ begin
       FormatActionPopup := FormatMenuItem.Action as TAction;
   end;
 
-  if not(Assigned(FormatActionTogether) and Assigned(FormatActionPopup)) then
+  // Actions are searched each time instead of being stored, because IDE can destroy them
+  // before plugin is unloaded. If they are already destroyed when disabling, there is nothing to restore.
+  if Assigned(FormatActionTogether) and Assigned(FormatActionPopup) then
+  begin
+    // Changind shortcut
+    ShortCutTemp := FormatActionTogether.ShortCut;
+    FormatActionTogether.ShortCut := FOldShortcut;
+    FormatActionPopup.ShortCut := FOldShortcut;
+    FOldShortcut := ShortCutTemp;
+  end
+  else if Value then
   begin
     ExceptionMessage := EmptyStr;
     if not Assigned(FormatActionTogether) then
@@ -72,13 +85,9 @@ begin
       ExceptionMessage := ExceptionMessage + COMMA_BOOL_ARRAY[ExceptionMessage = EmptyStr] + 'popup format action';
     ExceptionMessage := 'Did not found ' + ExceptionMessage;
     raise Exception.Create(ExceptionMessage);
-  end;
-
-  // Changind shortcut
-  ShortCutTemp := FormatActionTogether.ShortCut;
-  FormatActionTogether.ShortCut := FOldShortcut;
-  FormatActionPopup.ShortCut := FOldShortcut;
-  FOldShortcut := ShortCutTemp;
+  end
+  else
+    FOldShortcut := 0;
 
   FFeatureEnabled := Value;
 
@@ -88,9 +97,8 @@ end;
 
 procedure TRemoveFormatShortcutFeature.InitFeature;
 begin
-  inherited InitFeature;
-
   FOldShortcut := 0;
+  inherited InitFeature;
 end;
 
 procedure TRemoveFormatShortcutFeature.InitFeatureControls(ASettingsForm: TForm);

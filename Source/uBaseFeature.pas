@@ -19,6 +19,8 @@ type
 
     procedure InitFeature; virtual;
     procedure InitFeatureControls(ASettingsForm: TForm); virtual;
+    // Rolls back all changes made to the IDE, called before plugin is unloaded
+    procedure FinalizeFeature; virtual;
 
     procedure ReadFeatureSettings(AFeatureSettings: IXMLNode); virtual;
     procedure WriteFeatureSettings(AFeatureSettings: IXMLNode); virtual;
@@ -58,6 +60,12 @@ end;
 procedure TBaseFeature.InitFeatureControls(ASettingsForm: TForm);
 begin
   // Empty method, no controls to init
+end;
+
+procedure TBaseFeature.FinalizeFeature;
+begin
+  // Settings are not saved here, so feature will be enabled again on next IDE start
+  FeatureEnabled := False;
 end;
 
 procedure TBaseFeature.ReadFeatureSettings(AFeatureSettings: IXMLNode);
