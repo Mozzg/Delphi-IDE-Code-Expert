@@ -2,6 +2,8 @@ library DICE;
 
 { Delphi IDE Code Expert by Evgeny "Mozzg" Pervov }
 
+{$R 'DICEVersionInfo.res' 'Resources\DICEVersionInfo.rc'}
+
 {$WEAKLINKRTTI ON}
 {$RTTI EXPLICIT METHODS([]) PROPERTIES([]) FIELDS([])}
 
@@ -9,7 +11,10 @@ library DICE;
 
 {$R 'DICERecources.res' 'Resources\DICERecources.rc'}
 
+{$I LibSuffixes.inc}
+
 uses
+  ShareMem,
   ToolsAPI,
   uWizardMain in 'Source\uWizardMain.pas',
   uWizardConsts in 'Source\uWizardConsts.pas',
@@ -20,7 +25,8 @@ uses
   uWizardSettings in 'Source\uWizardSettings.pas',
   ufmWizardSettings in 'Source\Forms\ufmWizardSettings.pas' {fmWizardSettings},
   uRemoveExplicitFeature in 'Source\uRemoveExplicitFeature.pas',
-  uRemoveFormatShortcutFeature in 'Source\uRemoveFormatShortcutFeature.pas';
+  uRemoveFormatShortcutFeature in 'Source\uRemoveFormatShortcutFeature.pas',
+  uWizardUtils in 'Source\uWizardUtils.pas';
 
 exports
   InitWizard name WizardEntryPoint;

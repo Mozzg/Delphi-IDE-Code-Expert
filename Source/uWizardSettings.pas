@@ -21,6 +21,7 @@ type
     procedure InitXMLSettings;
     procedure FlushXMLSettings;
     function GetXMLSettingsForFeature(const AFeatureName: string): IXMLNode;
+    procedure CreateAndInitSettingsForm;
 
     procedure ShowModalSettingsForm;
   end;
@@ -96,15 +97,21 @@ begin
   Result := FXMLDocSettings.DocumentElement.ChildNodes.Nodes[AFeatureName];
 end;
 
-procedure TWizardSettings.ShowModalSettingsForm;
+procedure TWizardSettings.CreateAndInitSettingsForm;
 begin
   if not Assigned(FSettingsForm) then
   begin
     FSettingsForm := TfmWizardSettings.Create(nil);
     TDICEMainApp.GetDICEMainApp.Features.InitFeaturesControls(FSettingsForm);
     FSettingsForm.InitSectionsTree;
-  end;
 
+    FSettingsForm.Log('Settings form created');
+  end;
+end;
+
+procedure TWizardSettings.ShowModalSettingsForm;
+begin
+  CreateAndInitSettingsForm;
   FSettingsForm.ShowModal;
   TDICEMainApp.GetDICEMainApp.Features.SaveFeaturesSettings;
   FlushXMLSettings;

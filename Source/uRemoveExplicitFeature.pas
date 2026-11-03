@@ -66,14 +66,6 @@ begin
     FSettingsCheckBox.Checked := FFeatureEnabled;
 end;
 
-{procedure TRemoveExplicitPropertyFeature.DisableFeature;
-begin
-  if not FHookEnabled then Exit;
-
-  UnhookFunction(FExplicitHook);
-  FHookEnabled := False;
-end;    }
-
 procedure TRemoveExplicitPropertyFeature.InitFeatureControls(ASettingsForm: TForm);
 begin
   try

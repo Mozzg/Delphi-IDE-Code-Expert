@@ -4,8 +4,8 @@ object fmWizardSettings: TfmWizardSettings
   BorderIcons = [biSystemMenu]
   BorderStyle = bsSingle
   Caption = 'fmWizardSettings'
-  ClientHeight = 345
-  ClientWidth = 581
+  ClientHeight = 402
+  ClientWidth = 664
   Color = clBtnFace
   DefaultMonitor = dmMainForm
   Font.Charset = DEFAULT_CHARSET
@@ -20,17 +20,15 @@ object fmWizardSettings: TfmWizardSettings
   TextHeight = 15
   object pnButtons: TPanel
     Left = 0
-    Top = 310
-    Width = 581
+    Top = 367
+    Width = 664
     Height = 35
     Align = alBottom
     BevelOuter = bvNone
     TabOrder = 0
-    ExplicitTop = 472
-    ExplicitWidth = 715
     object btnOK: TButton
       AlignWithMargins = True
-      Left = 501
+      Left = 584
       Top = 5
       Width = 75
       Height = 25
@@ -42,42 +40,46 @@ object fmWizardSettings: TfmWizardSettings
       Caption = 'OK'
       ModalResult = 1
       TabOrder = 0
-      ExplicitLeft = 635
     end
   end
   object pnMain: TPanel
     Left = 0
     Top = 0
-    Width = 581
-    Height = 310
+    Width = 664
+    Height = 136
     Align = alClient
     BevelOuter = bvNone
     TabOrder = 1
-    ExplicitWidth = 715
-    ExplicitHeight = 472
     object tvSections: TTreeView
       AlignWithMargins = True
       Left = 3
       Top = 3
       Width = 190
-      Height = 304
+      Height = 130
       Align = alLeft
       Indent = 19
       ReadOnly = True
       TabOrder = 0
       OnChange = tvSectionsChange
-      ExplicitHeight = 466
     end
     object pnFrameSettingsContainer: TPanel
       AlignWithMargins = True
       Left = 199
       Top = 3
-      Width = 379
-      Height = 304
+      Width = 462
+      Height = 130
       Align = alClient
       TabOrder = 1
-      ExplicitWidth = 513
-      ExplicitHeight = 466
     end
+  end
+  object memLog: TMemo
+    Left = 0
+    Top = 136
+    Width = 664
+    Height = 231
+    Align = alBottom
+    ScrollBars = ssBoth
+    TabOrder = 2
+    Visible = False
   end
 end
