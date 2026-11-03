@@ -105,6 +105,9 @@ $(PreBuildEvent)]]></PreBuildEvent>
         <RcCompile Include="Resources\DICEVersionInfo.rc">
             <Form>DICEVersionInfo.res</Form>
         </RcCompile>
+        <RcCompile Include="Resources\DICERecources.rc">
+            <Form>DICERecources.res</Form>
+        </RcCompile>
         <DCCReference Include="Source\uWizardMain.pas"/>
         <DCCReference Include="Source\uWizardConsts.pas"/>
         <DCCReference Include="Source\uHooking.pas"/>
@@ -121,9 +124,6 @@ $(PreBuildEvent)]]></PreBuildEvent>
         <DCCReference Include="Source\uRemoveExplicitFeature.pas"/>
         <DCCReference Include="Source\uRemoveFormatShortcutFeature.pas"/>
         <DCCReference Include="Source\uWizardUtils.pas"/>
-        <RcCompile Include="Resources\DICERecources.rc">
-            <Form>DICERecources.res</Form>
-        </RcCompile>
         <None Include="jedi.inc"/>
         <None Include="LibSuffixes.inc"/>
         <BuildConfiguration Include="Base">

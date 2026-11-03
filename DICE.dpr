@@ -2,13 +2,11 @@ library DICE;
 
 { Delphi IDE Code Expert by Evgeny "Mozzg" Pervov }
 
-{$R 'DICEVersionInfo.res' 'Resources\DICEVersionInfo.rc'}
-
 {$WEAKLINKRTTI ON}
 {$RTTI EXPLICIT METHODS([]) PROPERTIES([]) FIELDS([])}
 
 {$R *.res}
-
+{$R 'DICEVersionInfo.res' 'Resources\DICEVersionInfo.rc'}
 {$R 'DICERecources.res' 'Resources\DICERecources.rc'}
 
 {$I LibSuffixes.inc}
