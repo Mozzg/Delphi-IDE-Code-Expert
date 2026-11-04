@@ -30,6 +30,8 @@ type
     property Logger: TWizardLogger read FLogger;
   end;
 
+  TBaseFeatureClass = class of TBaseFeature;
+
 implementation
 
 { TBaseFeature }

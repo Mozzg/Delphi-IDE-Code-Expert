@@ -3,22 +3,22 @@ unit uFeatureCollection;
 interface
 
 uses
-  System.Contnrs, System.SysUtils, System.Rtti, Xml.XMLIntf, Winapi.Windows,
+  System.Generics.Collections, System.SysUtils, Xml.XMLIntf, Winapi.Windows,
   uWizardConsts, uBaseFeature, uWizardSettings, uWizardLog, ufmWizardSettings;
 
 type
   TFeatureCollection = class(TObject)
   private
-    class var FFeatureClassList: TClassList;
+    class var FFeatureClassList: TList<TBaseFeatureClass>;
   private
-    FFeatureList: TObjectList;
+    FFeatureList: TObjectList<TBaseFeature>;
     FWizardSettings: TWizardSettings;
     FLogger: TWizardLogger;
   public
     constructor Create(AWizardSettings: TWizardSettings; ALogger: TWizardLogger);
     destructor Destroy; override;
 
-    class procedure RegisterFeature(AFeatureClass: TClass);
+    class procedure RegisterFeature(AFeatureClass: TBaseFeatureClass);
 
     procedure CreateAllFeatures;
     procedure InitAllFeatures;
@@ -35,7 +35,7 @@ constructor TFeatureCollection.Create(AWizardSettings: TWizardSettings; ALogger:
 begin
   inherited Create;
 
-  FFeatureList := TObjectList.Create(True);
+  FFeatureList := TObjectList<TBaseFeature>.Create(True);
   FWizardSettings := AWizardSettings;
   FLogger := ALogger;
 end;
@@ -47,34 +47,28 @@ begin
   inherited Destroy;
 end;
 
-class procedure TFeatureCollection.RegisterFeature(AFeatureClass: TClass);
+class procedure TFeatureCollection.RegisterFeature(AFeatureClass: TBaseFeatureClass);
 begin
   FFeatureClassList.Add(AFeatureClass);
 end;
 
 procedure TFeatureCollection.CreateAllFeatures;
 var
-  FeatureClass: TClass;
-  FeatureObject: TObject;
-  Context: TRttiContext;
-  RttiType: TRttiType;
-  RttiValue: TValue;
+  FeatureClass: TBaseFeatureClass;
+  Feature: TBaseFeature;
 begin
-  Context := TRttiContext.Create;
-
   for FeatureClass in FFeatureClassList do
   begin
-    FeatureObject := nil;
+    Feature := nil;
 
     try
-      RttiType := Context.GetType(FeatureClass);
-      RttiValue := RttiType.GetMethod('CreateFeature').Invoke(RttiType.AsInstance.MetaclassType, [FWizardSettings, FLogger]);
-      FeatureObject := RttiValue.AsObject;
-      FFeatureList.Add(FeatureObject)
+      // CreateFeature is virtual, so constructor of the actual feature class is called
+      Feature := FeatureClass.CreateFeature(FWizardSettings, FLogger);
+      FFeatureList.Add(Feature);
     except
       on E: Exception do
       begin
-        FreeAndNil(FeatureObject);
+        FreeAndNil(Feature);
         FLogger.LogException('Error creating feature of class ' + FeatureClass.ClassName, E);
       end;
     end;
@@ -83,14 +77,13 @@ end;
 
 procedure TFeatureCollection.InitAllFeatures;
 var
-  Feature: TObject;
+  Feature: TBaseFeature;
 begin
   for Feature in FFeatureList do
   begin
     // Error in one feature must not stop initialization of the others
     try
-      if Feature is TBaseFeature then
-        (Feature as TBaseFeature).InitFeature;
+      Feature.InitFeature;
     except
       on E: Exception do
         FLogger.LogException('Error initializing feature ' + Feature.ClassName, E);
@@ -100,22 +93,22 @@ end;
 
 procedure TFeatureCollection.InitFeaturesControls(ASettingsForm: TfmWizardSettings);
 var
-  Feature: TObject;
+  Feature: TBaseFeature;
 begin
   for Feature in FFeatureList do
-    (Feature as TBaseFeature).InitFeatureControls(ASettingsForm);
+    Feature.InitFeatureControls(ASettingsForm);
 end;
 
 procedure TFeatureCollection.SaveFeaturesSettings;
 var
-  Feature: TObject;
+  Feature: TBaseFeature;
   FeatureSettings: IXMLNode;
 begin
   for Feature in FFeatureList do
   begin
     try
       FeatureSettings := FWizardSettings.GetXMLSettingsForFeature(Feature.ClassName);
-      (Feature as TBaseFeature).WriteFeatureSettings(FeatureSettings);
+      Feature.WriteFeatureSettings(FeatureSettings);
     finally
       FeatureSettings := nil;
     end;
@@ -131,7 +124,7 @@ begin
   // IDE is shutting down, so errors are not shown, only reported to the debugger.
   for i := FFeatureList.Count - 1 downto 0 do
   begin
-    Feature := FFeatureList.Items[i] as TBaseFeature;
+    Feature := FFeatureList[i];
     try
       Feature.FinalizeFeature;
     except
@@ -142,7 +135,7 @@ begin
 end;
 
 initialization
-  TFeatureCollection.FFeatureClassList := TClassList.Create;
+  TFeatureCollection.FFeatureClassList := TList<TBaseFeatureClass>.Create;
 
 finalization
   FreeAndNil(TFeatureCollection.FFeatureClassList);
