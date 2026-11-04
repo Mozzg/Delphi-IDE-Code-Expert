@@ -4,53 +4,48 @@ interface
 
 uses
   System.SysUtils, Xml.XMLDoc, Xml.XMLIntf, System.IOUtils, Winapi.Windows,
-  ufmWizardSettings, uWizardConsts;
+  uWizardConsts, uWizardUtils, uWizardLog;
 
 type
+  // Storage of plugin settings in XML file. Settings form is managed by TDICEMainApp.
   TWizardSettings = class(TObject)
   private
-    FSettingsForm: TfmWizardSettings;
+    FLogger: TWizardLogger;
     FXMLDocSettings: IXMLDocument;
     FSettingsFilePath: string;
 
     function GetDLLPath: string;
   public
-    constructor Create;
+    constructor Create(ALogger: TWizardLogger);
     destructor Destroy; override;
 
     procedure InitXMLSettings;
     procedure FlushXMLSettings;
     function GetXMLSettingsForFeature(const AFeatureName: string): IXMLNode;
-
-    procedure ShowModalSettingsForm;
   end;
 
 implementation
 
-uses
-  uWizardMain;
-
 { TWizardSettings }
 
-constructor TWizardSettings.Create;
+constructor TWizardSettings.Create(ALogger: TWizardLogger);
 begin
   inherited Create;
+
+  FLogger := ALogger;
 end;
 
 destructor TWizardSettings.Destroy;
 begin
-  FreeAndNil(FSettingsForm);
   FXMLDocSettings := nil;
 
   inherited Destroy;
 end;
 
 function TWizardSettings.GetDLLPath: string;
-var
-  ModuleName: array[0..255] of WideChar;
 begin
-  GetModuleFileName(HInstance, @ModuleName[0], SizeOf(ModuleName));
-  Result := ModuleName;
+  // Directory of the plugin DLL, not the full file name
+  Result := ExtractFilePath(GetModuleFileNameCustom);
 end;
 
 procedure TWizardSettings.InitXMLSettings;
@@ -73,9 +68,18 @@ begin
     FXMLDocSettings.Options := [doNodeAutoCreate, doNodeAutoIndent, doAttrNull, doAutoSave];
     FXMLDocSettings.Encoding := 'UTF-8';
   except
-    FXMLDocSettings := nil;
-    FXMLDocSettings := NewXmlDocument;
-    FXMLDocSettings.Options := [doNodeAutoCreate, doNodeAutoIndent, doAttrNull, doAutoSave];
+    on E: Exception do
+    begin
+      FLogger.LogException('Error loading settings from ' + FSettingsFilePath
+          + ', default settings are used, file will be overwritten on next save', E);
+
+      // Root node is required, GetXMLSettingsForFeature works with DocumentElement
+      FXMLDocSettings := nil;
+      FXMLDocSettings := NewXmlDocument;
+      FXMLDocSettings.Options := [doNodeAutoCreate, doNodeAutoIndent, doAttrNull, doAutoSave];
+      FXMLDocSettings.Encoding := 'UTF-8';
+      FXMLDocSettings.AddChild('root');
+    end;
   end;
 end;
 
@@ -87,27 +91,14 @@ begin
     FXMLDocSettings.SaveToFile(FSettingsFilePath);
   except
     on E: Exception do
-      raise Exception.Create('Error saving ' + WIZARD_HELP_MENU_CAPTION + ' settings, message: ' + E.Message);
+      // Settings form is already closed here, so error is shown in Messages window
+      FLogger.LogException('Error saving settings to ' + FSettingsFilePath, E);
   end;
 end;
 
 function TWizardSettings.GetXMLSettingsForFeature(const AFeatureName: string): IXMLNode;
 begin
   Result := FXMLDocSettings.DocumentElement.ChildNodes.Nodes[AFeatureName];
-end;
-
-procedure TWizardSettings.ShowModalSettingsForm;
-begin
-  if not Assigned(FSettingsForm) then
-  begin
-    FSettingsForm := TfmWizardSettings.Create(nil);
-    TDICEMainApp.GetDICEMainApp.Features.InitFeaturesControls(FSettingsForm);
-    FSettingsForm.InitSectionsTree;
-  end;
-
-  FSettingsForm.ShowModal;
-  TDICEMainApp.GetDICEMainApp.Features.SaveFeaturesSettings;
-  FlushXMLSettings;
 end;
 
 end.

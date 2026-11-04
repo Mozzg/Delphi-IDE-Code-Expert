@@ -6,8 +6,10 @@ library DICE;
 {$RTTI EXPLICIT METHODS([]) PROPERTIES([]) FIELDS([])}
 
 {$R *.res}
-
+{$R 'DICEVersionInfo.res' 'Resources\DICEVersionInfo.rc'}
 {$R 'DICERecources.res' 'Resources\DICERecources.rc'}
+
+{$I LibSuffixes.inc}
 
 uses
   ToolsAPI,
@@ -20,7 +22,9 @@ uses
   uWizardSettings in 'Source\uWizardSettings.pas',
   ufmWizardSettings in 'Source\Forms\ufmWizardSettings.pas' {fmWizardSettings},
   uRemoveExplicitFeature in 'Source\uRemoveExplicitFeature.pas',
-  uRemoveFormatShortcutFeature in 'Source\uRemoveFormatShortcutFeature.pas';
+  uRemoveFormatShortcutFeature in 'Source\uRemoveFormatShortcutFeature.pas',
+  uWizardUtils in 'Source\uWizardUtils.pas',
+  uWizardLog in 'Source\uWizardLog.pas';
 
 exports
   InitWizard name WizardEntryPoint;

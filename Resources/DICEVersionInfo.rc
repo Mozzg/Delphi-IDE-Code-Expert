@@ -1,0 +1,29 @@
+LANGUAGE LANG_ENGLISH,SUBLANG_ENGLISH_US
+
+1 VERSIONINFO LOADONCALL MOVEABLE DISCARDABLE IMPURE
+FILEVERSION 1, 1, 0, 0
+PRODUCTVERSION 1, 1, 0, 0
+FILEFLAGSMASK VS_FFI_FILEFLAGSMASK
+FILEOS VOS__WINDOWS32
+FILETYPE VFT_DLL
+{
+  BLOCK "StringFileInfo"
+  {
+    BLOCK "040904E4"
+    {
+      VALUE "CompanyName", "Season's Fall Music\000"
+      VALUE "FileDescription", "Delphi IDE plugin for Embarcadero RAD Studio\000"
+      VALUE "FileVersion", "1.1.0.0\000"
+      VALUE "InternalName", "DICE\000"
+      VALUE "LegalCopyright", "Evgeny 'Mozzg' Pervov\000"
+      VALUE "OriginalFilename", "DICE.dll\000"
+      VALUE "ProductName", "Delphi IDE Code Expert (DICE)\000"
+      VALUE "ProductVersion", "1.1\000"
+      VALUE "Comments", "DICE: A RAD Studio IDE plugin for some useful functions.\000"
+    }
+  }
+  BLOCK "VarFileInfo"
+  {
+    VALUE "Translation", 1033, 1252
+  }
+}

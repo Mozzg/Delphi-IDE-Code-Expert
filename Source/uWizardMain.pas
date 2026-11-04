@@ -5,24 +5,33 @@ interface
 uses
   ToolsApi, System.SysUtils, Vcl.Forms, Vcl.Graphics, Winapi.Windows, System.Classes,
   Vcl.Menus,
-  uWizardConsts, uWizardSettings, uFeatureCollection;
+  uWizardConsts, uWizardSettings, uFeatureCollection, uWizardUtils, uWizardLog, ufmWizardSettings;
 
 type
+  // Plugin "application": creates all plugin objects and passes them their dependencies.
+  // Lower level units get what they need through constructors and don't call GetDICEMainApp.
   TDICEMainApp = class(TObject)
   private
     class var FPluginTerminated: Boolean;
     class var FDICEMainAppInstance: TDICEMainApp;
     class var FSplashTimerHandle: UIntPtr;
   private
-    FDICEBitmap: Vcl.Graphics.TBitmap;
-    FAboutBitmap: Vcl.Graphics.TBitmap;
+    FMenuItemImage: Vcl.Graphics.TBitmap;
+    FDICEMenuItem: TMenuItem;  // Owned by IDE Tools menu, but freed by plugin on unload
     FAboutInfoIndex: Integer;
     FWizardSettings: TWizardSettings;
+    FSettingsForm: TfmWizardSettings;
     FFeatures: TFeatureCollection;
+    FLogger: TWizardLogger;
+    FWizardVersion: TDICEVersionInfo;
 
     procedure InitSplashScreenInfo;
     procedure InitAboutBoxInfo;
+    procedure InitMenuItemImage;
     procedure InitAfterIDELoad;
+    procedure CreateAndInitSettingsForm;
+    procedure ApplyIDEThemeToSettingsForm;
+    procedure ShowModalSettingsForm;
 
     procedure OnClickWizardSettingsMenuItem(Sender: TObject);
   public
@@ -36,20 +45,16 @@ type
 
     property WizardSettings: TWizardSettings read FWizardSettings;
     property Features: TFeatureCollection read FFeatures;
+    property Logger: TWizardLogger read FLogger;
   end;
 
-  TDICEWizard = class(TInterfacedObject, IOTAWizard, IOTAMenuWizard)
+  TDICEWizard = class(TNotifierObject, IOTANotifier, IOTAWizard, IOTAMenuWizard)
   public
     // IOTAWizard
     function GetIDString: string;
     function GetName: string;
     function GetState: TWizardState;
     procedure Execute;
-    // IOTANotifier
-    procedure AfterSave;
-    procedure BeforeSave;
-    procedure Destroyed;
-    procedure Modified;
     // IOTAMenuWizard
     function GetMenuText: string;
   end;
@@ -58,9 +63,17 @@ type
 function InitWizard(const BorlandIDEServices: IBorlandIDEServices; RegisterProc: TWizardRegisterProc;
     var Terminate: TWizardTerminateProc): Boolean stdcall;
 
+// +++  http://www.delphikingdom.com/asp/viewitem.asp?catalogid=899
+// +++ C:\GitHub Repos\OTAPI-Docs\The Delphi IDE Open Tools API - Version 1.2.docx
+
 implementation
 
 { }
+
+function LoadBitmapHandle(const AResName: string): HBITMAP;
+begin
+  Result := HBITMAP(LoadImage(HInstance, PChar(AResName), IMAGE_BITMAP, 0, 0, LR_CREATEDIBSECTION));
+end;
 
 procedure DestroySplashTimer;
 begin
@@ -69,16 +82,30 @@ begin
   TDICEMainApp.FSplashTimerHandle := 0;
 end;
 
+// Logs an error that was not handled by the plugin objects. When plugin "application" doesn't exist
+// (not created yet or already destroyed), error can be reported only to the debugger.
+procedure LogUnhandledException(const AContext: string; E: Exception);
+begin
+  if not TDICEMainApp.FPluginTerminated and Assigned(TDICEMainApp.FDICEMainAppInstance) then
+    TDICEMainApp.FDICEMainAppInstance.Logger.LogException(AContext, E)
+  else
+    OutputDebugString(PChar(WIZARD_NAME + ': ' + AContext + ', ' + E.ClassName + ': ' + E.Message));
+end;
+
 procedure OnSplashTimer(Wnd: HWND; Msg: Cardinal; IDEvent: Cardinal; Time: DWORD); stdcall;
 begin
-  if not Assigned(Application) then
-    DestroySplashTimer
-  else if Application.Terminated then
-    DestroySplashTimer
-  else if (Application.MainForm <> nil) and Application.MainForm.Visible then
-  begin
-    DestroySplashTimer;
-    TDICEMainApp.GetDICEMainApp.InitAfterIDELoad;
+  // Windows silently suppresses exceptions raised in timer callbacks, so they must be handled here
+  try
+    if TDICEMainApp.FPluginTerminated or not Assigned(Application) or Application.Terminated then
+      DestroySplashTimer
+    else if (Application.MainForm <> nil) and Application.MainForm.Visible then
+    begin
+      DestroySplashTimer;
+      TDICEMainApp.GetDICEMainApp.InitAfterIDELoad;
+    end;
+  except
+    on E: Exception do
+      LogUnhandledException('Error initializing plugin after IDE load', E);
   end;
 end;
 
@@ -90,6 +117,8 @@ end;
 
 procedure TerminateWizard;
 begin
+  // First of all, so timer is killed even if plugin is already marked as terminated
+  DestroySplashTimer;
   if TDICEMainApp.FPluginTerminated then Exit;
 
   TDICEMainApp.FPluginTerminated := True;
@@ -101,47 +130,80 @@ function InitWizard(const BorlandIDEServices: IBorlandIDEServices; RegisterProc:
 var
   MainApp: TDICEMainApp;
 begin
-  TDICEMainApp.FSplashTimerHandle := 0;
-  TDICEMainApp.FPluginTerminated := False;
-  Terminate := TerminateWizard;
-  MainApp := TDICEMainApp.GetDICEMainApp;
-  MainApp.InitApp;
-  RegisterProc(TDICEWizard.Create);
-  InitSplashTimer;
-  Result := True;
+  Result := Assigned(BorlandIDEServices);
+
+  if Result then
+  begin
+    TDICEMainApp.FSplashTimerHandle := 0;
+    TDICEMainApp.FPluginTerminated := False;
+    Terminate := TerminateWizard;
+
+    // Exception must not get into the IDE expert loader. InitApp handles errors of its parts itself,
+    // so here are only fatal errors (plugin objects can't be created), and the plugin is not loaded.
+    try
+      MainApp := TDICEMainApp.GetDICEMainApp;
+      MainApp.InitApp;
+      InitSplashTimer;
+
+      // Last, because after registration IDE owns the wizard and the plugin can't be unloaded here
+      RegisterProc(TDICEWizard.Create);
+    except
+      on E: Exception do
+      begin
+        // Rolls back everything already added to the IDE, so the DLL can be unloaded
+        TerminateWizard;
+        Terminate := nil;
+        Result := False;
+        LogUnhandledException('Error loading plugin', E);
+      end;
+    end;
+  end;
 end;
 
 { TDICEMainApp }
 
 constructor TDICEMainApp.Create;
+var
+  ModuleFileName: string;
 begin
   inherited Create;
 
-  FWizardSettings := TWizardSettings.Create;
-  FFeatures := TFeatureCollection.Create;
+  // First of all, so other parts of the plugin can log their errors
+  FLogger := TWizardLogger.Create;
+  FWizardSettings := TWizardSettings.Create(FLogger);
+  FFeatures := TFeatureCollection.Create(FWizardSettings, FLogger);
+
+  ModuleFileName := GetModuleFileNameCustom;
+  if ModuleFileName <> EmptyStr then
+    GetFileVersionCustom(ModuleFileName, FWizardVersion);
 
   FAboutInfoIndex := -1;
-  InitSplashScreenInfo;
-  InitAboutBoxInfo;
 end;
 
 destructor TDICEMainApp.Destroy;
 var
   AboutBoxIntf: IOTAAboutBoxServices;
 begin
+  // GetDICEMainApp is not available here (instance is already nil), so nothing below should call it.
+
+  // Menu first, so it can't be clicked while plugin is being destroyed
+  FreeAndNil(FDICEMenuItem);
+
+  // Features must be rolled back and freed before settings form, because the form owns features controls
+  if Assigned(FFeatures) then
+    FFeatures.FinalizeAllFeatures;
+  FreeAndNil(FFeatures);
+  FreeAndNil(FSettingsForm);
+  FreeAndNil(FWizardSettings);
+
   try
-    if (FAboutInfoIndex <> -1) and Assigned(BorlandIDEServices)
-        and Supports(BorlandIDEServices, IOTAAboutBoxServices, AboutBoxIntf)
-    then
+    if (FAboutInfoIndex <> -1) and Supports(BorlandIDEServices, IOTAAboutBoxServices, AboutBoxIntf) then
       AboutBoxIntf.RemovePluginInfo(FAboutInfoIndex);
   finally
     AboutBoxIntf := nil;
   end;
-  FreeAndNil(FAboutBitmap);
-  FreeAndNil(FDICEBitmap);
-
-  FreeAndNil(FWizardSettings);
-  FreeAndNil(FFeatures);
+  FreeAndNil(FMenuItemImage);
+  FreeAndNil(FLogger);
 
   TDICEMainApp.FPluginTerminated := True;
   inherited Destroy;
@@ -172,71 +234,189 @@ end;
 
 procedure TDICEMainApp.InitApp;
 begin
-  FWizardSettings.InitXMLSettings;
+  // Each part is protected separately, so an error in one of them doesn't stop the others.
+  // Messages View is not ready yet, logger keeps errors and shows them when IDE is loaded.
+  try
+    InitSplashScreenInfo;
+  except
+    on E: Exception do
+      FLogger.LogException('Error adding splash screen info', E);
+  end;
+
+  try
+    InitAboutBoxInfo;
+  except
+    on E: Exception do
+      FLogger.LogException('Error adding about box info', E);
+  end;
+
+  try
+    InitMenuItemImage;
+  except
+    on E: Exception do
+      FLogger.LogException('Error loading menu item image', E);
+  end;
+
+  try
+    FWizardSettings.InitXMLSettings;
+  except
+    on E: Exception do
+      FLogger.LogException('Error initializing settings', E);
+  end;
 end;
 
 procedure TDICEMainApp.InitSplashScreenInfo;
+var
+  SplashHandle: HBITMAP;
 begin
-  if not Assigned(FDICEBitmap) then
-  begin
-    FDICEBitmap := Vcl.Graphics.TBitmap.Create;
-    FDICEBitmap.LoadFromResourceName(HInstance, 'DICESPLASHBMP');
-  end;
+  if not Assigned(SplashScreenServices) then
+    Exit;
 
-  SplashScreenServices.AddPluginBitmap(WIZARD_NAME, FDICEBitmap.Handle);
+  SplashHandle := LoadBitmapHandle('DICESPLASHBMP');
+
+  SplashScreenServices.AddPluginBitmap(WIZARD_PRODUCT_NAME, SplashHandle, False,
+      Format(WIZARD_SPLASH_TEXT, [FWizardVersion.FMajor, FWizardVersion.FMinor,
+      GetVersionRevision(FWizardVersion.FBugFix){$IFDEF DEBUG}+ ' (debug)'{$ENDIF}]));
 end;
 
 procedure TDICEMainApp.InitAboutBoxInfo;
 var
   AboutBoxIntf: IOTAAboutBoxServices;
+  AboutHandle: HBITMAP;
 begin
-  if not Assigned(FAboutBitmap) then
-  begin
-    FAboutBitmap := Vcl.Graphics.TBitmap.Create;
-    FAboutBitmap.LoadFromResourceName(HInstance, 'DICEABOUTHBMP');
-  end;
-
   try
-    if Assigned(BorlandIDEServices) and Supports(BorlandIDEServices, IOTAAboutBoxServices, AboutBoxIntf) then
-      FAboutInfoIndex := AboutBoxIntf.AddPluginInfo(WIZARD_NAME, WIZARD_HELP_MENU_TEXT,
-          FAboutBitmap.Handle);
+    AboutHandle := LoadBitmapHandle('DICEABOUTHBMP');
+
+    if Supports(BorlandIDEServices, IOTAAboutBoxServices, AboutBoxIntf) then
+      FAboutInfoIndex := AboutBoxIntf.AddPluginInfo(Format(WIZARD_NAME + ' ' + WIZARD_SPLASH_TEXT,
+          [FWizardVersion.FMajor, FWizardVersion.FMinor, GetVersionRevision(FWizardVersion.FBugFix){$IFDEF DEBUG}+ ' (debug)'{$ENDIF}]),
+          Format(WIZARD_ABOUT_TEXT, [WIZARD_PRODUCT_NAME, WIZARD_COPYRIGHT_TEXT]),
+          AboutHandle, False, WIZARD_LICENCE_TEXT);
   finally
     AboutBoxIntf := nil;
   end;
 end;
 
+procedure TDICEMainApp.InitMenuItemImage;
+begin
+  if not Assigned(FMenuItemImage) then
+    FMenuItemImage := LoadMenuBitmap('DICEABOUTHBMP');
+end;
+
 procedure TDICEMainApp.InitAfterIDELoad;
 var
-  ToolsComponent, ConfigureComponent: TComponent;
-  ToolsMenuItem, DICEMenuItem: TMenuItem;
+  ToolsMenuItem, FirstDivider: TMenuItem;
+  AppMainMenu: TMainMenu;
+  ServicesIntf: INTAServices;
+  i, DividerIndex: Integer;
 begin
-  ToolsComponent := Application.MainForm.FindComponent('ToolsMenu');
-  if (ToolsComponent is TMenuItem) then
-    ToolsMenuItem := ToolsComponent as TMenuItem
-  else
-    ToolsMenuItem := nil;
+  // IDE is loaded, messages logged before this moment can be shown now
+  FLogger.SetMessageViewReady;
 
-  if Assigned(ToolsMenuItem) then
-  begin
-    DICEMenuItem := TMenuItem.Create(ToolsMenuItem);
-    DICEMenuItem.Name := WIZARD_SETTINGS_MENU_ITEM_NAME;
-    DICEMenuItem.Caption := WIZARD_SETTINGS_MENU_ITEM_CAPTION;
-    DICEMenuItem.OnClick := OnClickWizardSettingsMenuItem;
-
-    ConfigureComponent := Application.MainForm.FindComponent('ToolsToolsItem');
-    if Assigned(ConfigureComponent) and (ConfigureComponent is TMenuItem) then
-      ToolsMenuItem.Insert(ToolsMenuItem.IndexOf(ConfigureComponent as TMenuItem) + 1, DICEMenuItem)
+  // Each part is protected separately, so an error in one of them doesn't stop the others
+  try
+    if Supports(BorlandIDEServices, INTAServices, ServicesIntf) then
+      AppMainMenu := ServicesIntf.GetMainMenu
     else
-      ToolsMenuItem.Insert(0, DICEMenuItem);
+      AppMainMenu := nil;
+
+    if Assigned(AppMainMenu) then
+    begin
+      ToolsMenuItem := nil;
+      for i := 0 to AppMainMenu.Items.Count - 1 do
+        if AppMainMenu.Items[i].Name = 'ToolsMenu' then
+        begin
+          ToolsMenuItem := AppMainMenu.Items[i];
+          Break;
+        end;
+
+      if Assigned(ToolsMenuItem) then
+      begin
+        FDICEMenuItem := TMenuItem.Create(ToolsMenuItem);
+        FDICEMenuItem.Name := WIZARD_SETTINGS_MENU_ITEM_NAME;
+        FDICEMenuItem.Caption := WIZARD_SETTINGS_MENU_ITEM_CAPTION;
+        FDICEMenuItem.OnClick := OnClickWizardSettingsMenuItem;
+
+        if Assigned(FMenuItemImage) then
+          FDICEMenuItem.ImageIndex := ServicesIntf.AddImage(WIZARD_ID_STRING + '.ICON', [FMenuItemImage]);
+
+        FirstDivider := ToolsMenuItem.Find('-');
+        if Assigned(FirstDivider) then
+          DividerIndex := FirstDivider.MenuIndex
+        else
+          DividerIndex := 0;
+
+        ToolsMenuItem.Insert(DividerIndex, FDICEMenuItem);
+      end
+      else
+        FLogger.LogError('Tools menu not found, settings menu item is not added');
+    end;
+  except
+    on E: Exception do
+    begin
+      FreeAndNil(FDICEMenuItem);
+      FLogger.LogException('Error adding settings menu item', E);
+    end;
   end;
 
-  FFeatures.CreateAllFeatures(FWizardSettings);
+  // Errors of single features are handled inside, other features are still created and initialized
+  FFeatures.CreateAllFeatures;
   FFeatures.InitAllFeatures;
+
+  try
+    CreateAndInitSettingsForm;
+  except
+    on E: Exception do
+      FLogger.LogException('Error creating settings form', E);
+  end;
+end;
+
+procedure TDICEMainApp.CreateAndInitSettingsForm;
+var
+  ThemingServices: IOTAIDEThemingServices;
+begin
+  if not Assigned(FSettingsForm) then
+  begin
+    // Form class must be registered before the form is created, so IDE applies its style to the form
+    if Supports(BorlandIDEServices, IOTAIDEThemingServices, ThemingServices) then
+      ThemingServices.RegisterFormClass(TfmWizardSettings);
+
+    FSettingsForm := TfmWizardSettings.Create(nil);
+    FFeatures.InitFeaturesControls(FSettingsForm);
+    FSettingsForm.InitSectionsTree;
+
+    FLogger.Log('Settings form created');
+  end;
+end;
+
+procedure TDICEMainApp.ApplyIDEThemeToSettingsForm;
+var
+  ThemingServices: IOTAIDEThemingServices;
+begin
+  // Called before each showing, because user can change IDE theme while the form exists.
+  // ApplyTheme sets colors of controls without style hooks (panels, labels, frames).
+  try
+    if Supports(BorlandIDEServices, IOTAIDEThemingServices, ThemingServices)
+        and ThemingServices.IDEThemingEnabled then
+      ThemingServices.ApplyTheme(FSettingsForm);
+  except
+    on E: Exception do
+      FLogger.LogException('Error applying IDE theme to settings form', E);
+  end;
+end;
+
+procedure TDICEMainApp.ShowModalSettingsForm;
+begin
+  CreateAndInitSettingsForm;
+  ApplyIDEThemeToSettingsForm;
+  FSettingsForm.ShowModal;
+  FFeatures.SaveFeaturesSettings;
+  FWizardSettings.FlushXMLSettings;
 end;
 
 procedure TDICEMainApp.OnClickWizardSettingsMenuItem(Sender: TObject);
 begin
-  WizardSettings.ShowModalSettingsForm;
+  ShowModalSettingsForm;
 end;
 
 { TDICEWizard }
@@ -259,23 +439,8 @@ end;
 procedure TDICEWizard.Execute;
 begin
   if Assigned(Application) then
-    Application.MessageBox(PWideChar(WIZARD_HELP_MENU_TEXT), PWideChar(WIZARD_NAME));
-end;
-
-procedure TDICEWizard.AfterSave;
-begin
-end;
-
-procedure TDICEWizard.BeforeSave;
-begin
-end;
-
-procedure TDICEWizard.Destroyed;
-begin
-end;
-
-procedure TDICEWizard.Modified;
-begin
+    Application.MessageBox(PWideChar(Format(WIZARD_HELP_MENU_TEXT, [WIZARD_PRODUCT_NAME, WIZARD_COPYRIGHT_TEXT, WIZARD_LICENCE_TEXT])),
+        PWideChar(WIZARD_NAME));
 end;
 
 function TDICEWizard.GetMenuText: string;

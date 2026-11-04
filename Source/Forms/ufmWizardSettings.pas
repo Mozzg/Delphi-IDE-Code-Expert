@@ -3,9 +3,9 @@ unit ufmWizardSettings;
 interface
 
 uses
-  Vcl.Forms,
-  uWizardConsts, ufrBaseSettings, Vcl.StdCtrls, System.Classes, Vcl.Controls, Vcl.ExtCtrls,
-  Vcl.ComCtrls, System.SysUtils, System.Contnrs;
+  Vcl.Forms, Vcl.ComCtrls, Vcl.ExtCtrls, Vcl.Controls, System.Classes, Vcl.StdCtrls,
+  System.SysUtils, System.Contnrs, Winapi.Windows, Vcl.Graphics,
+  uWizardConsts, ufrBaseSettings, uWizardUtils;
 
 type
   TfmWizardSettings = class(TForm)
@@ -22,6 +22,7 @@ type
     FFrameList: TObjectList;
     FCurrentVisibleFrame: TfrBaseSettings;
 
+    function CreateIconFromBitmapRes(const AResName: string): HICON;
     function CreateNewSection(const ANewSectionName: string): TTreeNode;
     procedure AddControlToSection(TreeNode: TTreeNode; AControl: TControl);
   public
@@ -32,6 +33,33 @@ type
 implementation
 
 {$R *.dfm}
+
+function TfmWizardSettings.CreateIconFromBitmapRes(const AResName: string): HICON;
+var
+  ColorBitmap: Vcl.Graphics.TBitmap;
+  MaskBits: TBytes;
+  MaskHandle: HBITMAP;
+  IconInfo: TIconInfo;
+begin
+  ColorBitmap := LoadMenuBitmap(AResName);  // 32-bit with alpha
+  try
+    // Mask is ignored for 32-bit icons with alpha, but must exist and be zeroed
+    SetLength(MaskBits, ((ColorBitmap.Width + 15) div 16) * 2 * ColorBitmap.Height);
+    MaskHandle := CreateBitmap(ColorBitmap.Width, ColorBitmap.Height, 1, 1, MaskBits);
+    try
+      IconInfo.fIcon := True;
+      IconInfo.xHotspot := 0;
+      IconInfo.yHotspot := 0;
+      IconInfo.hbmMask := MaskHandle;
+      IconInfo.hbmColor := ColorBitmap.Handle;
+      Result := CreateIconIndirect(IconInfo);  // copies both bitmaps
+    finally
+      DeleteObject(MaskHandle);
+    end;
+  finally
+    ColorBitmap.Free;
+  end;
+end;
 
 function TfmWizardSettings.CreateNewSection(const ANewSectionName: string): TTreeNode;
 var
@@ -102,6 +130,7 @@ procedure TfmWizardSettings.FormCreate(Sender: TObject);
 begin
   FFrameList := TObjectList.Create(False);
   Caption := WIZARD_SETTINGS_MENU_ITEM_CAPTION;
+  Self.Icon.Handle := CreateIconFromBitmapRes('DICEABOUTHBMP');
 end;
 
 procedure TfmWizardSettings.FormDestroy(Sender: TObject);

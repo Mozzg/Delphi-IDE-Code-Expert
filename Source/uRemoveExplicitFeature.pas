@@ -3,9 +3,8 @@ unit uRemoveExplicitFeature;
 interface
 
 uses
-  Vcl.Dialogs, System.Classes, System.SysUtils, Vcl.Controls, Vcl.StdCtrls,
-  Vcl.Forms, Xml.XMLIntf, System.Variants,
-  uBaseFeature, uHooking, ufmWizardSettings, uWizardSettings, uFeatureCollection;
+  System.Classes, System.SysUtils, Vcl.Controls, Vcl.StdCtrls, Vcl.Forms,
+  uBaseFeature, uHooking, ufmWizardSettings, uFeatureCollection;
 
 type
   TRemoveExplicitPropertyFeature = class(TBaseFeature)
@@ -17,7 +16,7 @@ type
   protected
     procedure SetFeatureEnabled(Value: Boolean); override;
   public
-    procedure InitFeatureControls(ASettingsForm: TForm); override;
+    procedure InitFeatureControls(ASettingsForm: TfmWizardSettings); override;
   end;
 
 implementation
@@ -49,7 +48,7 @@ type
 
 procedure TRemoveExplicitPropertyFeature.SettingsCheckBoxClick(Sender: TObject);
 begin
-  FeatureEnabled := (Sender as TCheckBox).Checked;
+  ApplyCheckBoxState(Sender as TCheckBox);
 end;
 
 procedure TRemoveExplicitPropertyFeature.SetFeatureEnabled(Value: Boolean);
@@ -66,15 +65,7 @@ begin
     FSettingsCheckBox.Checked := FFeatureEnabled;
 end;
 
-{procedure TRemoveExplicitPropertyFeature.DisableFeature;
-begin
-  if not FHookEnabled then Exit;
-
-  UnhookFunction(FExplicitHook);
-  FHookEnabled := False;
-end;    }
-
-procedure TRemoveExplicitPropertyFeature.InitFeatureControls(ASettingsForm: TForm);
+procedure TRemoveExplicitPropertyFeature.InitFeatureControls(ASettingsForm: TfmWizardSettings);
 begin
   try
     FSettingsCheckBox := TCheckBox.Create(nil);
@@ -85,10 +76,14 @@ begin
     FSettingsCheckBox.OnClick := SettingsCheckBoxClick;
     FSettingsCheckBox.Checked := FeatureEnabled;
 
-    // Assinging parent to control
-    TfmWizardSettings(ASettingsForm).AddSettingsControl('Global', FSettingsCheckBox);
+    // Assigning parent to control
+    ASettingsForm.AddSettingsControl('Global', FSettingsCheckBox);
   except
-    FreeAndNil(FSettingsCheckBox);
+    on E: Exception do
+    begin
+      FreeAndNil(FSettingsCheckBox);
+      FLogger.LogException('Error creating settings controls of feature ' + ClassName, E);
+    end;
   end;
 end;
 

@@ -4,7 +4,7 @@ interface
 
 uses
   Vcl.Forms, Vcl.StdCtrls, Vcl.ActnList, Vcl.Menus, System.Classes, System.SysUtils,
-  uBaseFeature, ufmWizardSettings, Vcl.Dialogs, uFeatureCollection;
+  uBaseFeature, ufmWizardSettings, uFeatureCollection;
 
 type
   TRemoveFormatShortcutFeature = class(TBaseFeature)
@@ -17,7 +17,7 @@ type
     procedure SetFeatureEnabled(Value: Boolean); override;
   public
     procedure InitFeature; override;
-    procedure InitFeatureControls(ASettingsForm: TForm); override;
+    procedure InitFeatureControls(ASettingsForm: TfmWizardSettings); override;
   end;
 
 implementation
@@ -26,7 +26,7 @@ implementation
 
 procedure TRemoveFormatShortcutFeature.SettingsCheckBoxClick(Sender: TObject);
 begin
-  FeatureEnabled := (Sender as TCheckBox).Checked;
+  ApplyCheckBoxState(Sender as TCheckBox);
 end;
 
 procedure TRemoveFormatShortcutFeature.SetFeatureEnabled(Value: Boolean);
@@ -55,7 +55,10 @@ begin
   end;
 
   //Finding action from PopupMenu
-  FoundComponent := Application.MainForm.FindComponent('mnuFormatSource');
+  if Assigned(Application.MainForm) then
+    FoundComponent := Application.MainForm.FindComponent('mnuFormatSource')
+  else
+    FoundComponent := nil;
   if Assigned(FoundComponent) and (FoundComponent is TMenuItem) then
   begin
     FormatMenuItem := FoundComponent as TMenuItem;
@@ -63,7 +66,17 @@ begin
       FormatActionPopup := FormatMenuItem.Action as TAction;
   end;
 
-  if not(Assigned(FormatActionTogether) and Assigned(FormatActionPopup)) then
+  // Actions are searched each time instead of being stored, because IDE can destroy them
+  // before plugin is unloaded. If they are already destroyed when disabling, there is nothing to restore.
+  if Assigned(FormatActionTogether) and Assigned(FormatActionPopup) then
+  begin
+    // Changing shortcut
+    ShortCutTemp := FormatActionTogether.ShortCut;
+    FormatActionTogether.ShortCut := FOldShortcut;
+    FormatActionPopup.ShortCut := FOldShortcut;
+    FOldShortcut := ShortCutTemp;
+  end
+  else if Value then
   begin
     ExceptionMessage := EmptyStr;
     if not Assigned(FormatActionTogether) then
@@ -72,13 +85,9 @@ begin
       ExceptionMessage := ExceptionMessage + COMMA_BOOL_ARRAY[ExceptionMessage = EmptyStr] + 'popup format action';
     ExceptionMessage := 'Did not found ' + ExceptionMessage;
     raise Exception.Create(ExceptionMessage);
-  end;
-
-  // Changind shortcut
-  ShortCutTemp := FormatActionTogether.ShortCut;
-  FormatActionTogether.ShortCut := FOldShortcut;
-  FormatActionPopup.ShortCut := FOldShortcut;
-  FOldShortcut := ShortCutTemp;
+  end
+  else
+    FOldShortcut := 0;
 
   FFeatureEnabled := Value;
 
@@ -88,12 +97,11 @@ end;
 
 procedure TRemoveFormatShortcutFeature.InitFeature;
 begin
-  inherited InitFeature;
-
   FOldShortcut := 0;
+  inherited InitFeature;
 end;
 
-procedure TRemoveFormatShortcutFeature.InitFeatureControls(ASettingsForm: TForm);
+procedure TRemoveFormatShortcutFeature.InitFeatureControls(ASettingsForm: TfmWizardSettings);
 begin
   try
     FSettingsCheckBox := TCheckBox.Create(nil);
@@ -104,10 +112,14 @@ begin
     FSettingsCheckBox.OnClick := SettingsCheckBoxClick;
     FSettingsCheckBox.Checked := FeatureEnabled;
 
-    // Assinging parent to control
-    TfmWizardSettings(ASettingsForm).AddSettingsControl('Global', FSettingsCheckBox);
+    // Assigning parent to control
+    ASettingsForm.AddSettingsControl('Global', FSettingsCheckBox);
   except
-    FreeAndNil(FSettingsCheckBox);
+    on E: Exception do
+    begin
+      FreeAndNil(FSettingsCheckBox);
+      FLogger.LogException('Error creating settings controls of feature ' + ClassName, E);
+    end;
   end;
 end;
 
