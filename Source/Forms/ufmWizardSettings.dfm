@@ -13,7 +13,7 @@ object fmWizardSettings: TfmWizardSettings
   Font.Height = -12
   Font.Name = 'Segoe UI'
   Font.Style = []
-  Position = poDesigned
+  Position = poMainFormCenter
   OnCreate = FormCreate
   OnDestroy = FormDestroy
   OnShow = FormShow
@@ -37,7 +37,9 @@ object fmWizardSettings: TfmWizardSettings
       Margins.Right = 5
       Margins.Bottom = 5
       Align = alRight
+      Cancel = True
       Caption = 'OK'
+      Default = True
       ModalResult = 1
       TabOrder = 0
     end

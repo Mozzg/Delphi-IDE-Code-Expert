@@ -30,6 +30,7 @@ type
     procedure InitMenuItemImage;
     procedure InitAfterIDELoad;
     procedure CreateAndInitSettingsForm;
+    procedure ApplyIDEThemeToSettingsForm;
     procedure ShowModalSettingsForm;
 
     procedure OnClickWizardSettingsMenuItem(Sender: TObject);
@@ -81,14 +82,30 @@ begin
   TDICEMainApp.FSplashTimerHandle := 0;
 end;
 
+// Logs an error that was not handled by the plugin objects. When plugin "application" doesn't exist
+// (not created yet or already destroyed), error can be reported only to the debugger.
+procedure LogUnhandledException(const AContext: string; E: Exception);
+begin
+  if not TDICEMainApp.FPluginTerminated and Assigned(TDICEMainApp.FDICEMainAppInstance) then
+    TDICEMainApp.FDICEMainAppInstance.Logger.LogException(AContext, E)
+  else
+    OutputDebugString(PChar(WIZARD_NAME + ': ' + AContext + ', ' + E.ClassName + ': ' + E.Message));
+end;
+
 procedure OnSplashTimer(Wnd: HWND; Msg: Cardinal; IDEvent: Cardinal; Time: DWORD); stdcall;
 begin
-  if TDICEMainApp.FPluginTerminated or not Assigned(Application) or Application.Terminated then
-    DestroySplashTimer
-  else if (Application.MainForm <> nil) and Application.MainForm.Visible then
-  begin
-    DestroySplashTimer;
-    TDICEMainApp.GetDICEMainApp.InitAfterIDELoad;
+  // Windows silently suppresses exceptions raised in timer callbacks, so they must be handled here
+  try
+    if TDICEMainApp.FPluginTerminated or not Assigned(Application) or Application.Terminated then
+      DestroySplashTimer
+    else if (Application.MainForm <> nil) and Application.MainForm.Visible then
+    begin
+      DestroySplashTimer;
+      TDICEMainApp.GetDICEMainApp.InitAfterIDELoad;
+    end;
+  except
+    on E: Exception do
+      LogUnhandledException('Error initializing plugin after IDE load', E);
   end;
 end;
 
@@ -121,12 +138,25 @@ begin
     TDICEMainApp.FPluginTerminated := False;
     Terminate := TerminateWizard;
 
-    MainApp := TDICEMainApp.GetDICEMainApp;
-    MainApp.InitApp;
+    // Exception must not get into the IDE expert loader. InitApp handles errors of its parts itself,
+    // so here are only fatal errors (plugin objects can't be created), and the plugin is not loaded.
+    try
+      MainApp := TDICEMainApp.GetDICEMainApp;
+      MainApp.InitApp;
+      InitSplashTimer;
 
-    RegisterProc(TDICEWizard.Create);
-
-    InitSplashTimer;
+      // Last, because after registration IDE owns the wizard and the plugin can't be unloaded here
+      RegisterProc(TDICEWizard.Create);
+    except
+      on E: Exception do
+      begin
+        // Rolls back everything already added to the IDE, so the DLL can be unloaded
+        TerminateWizard;
+        Terminate := nil;
+        Result := False;
+        LogUnhandledException('Error loading plugin', E);
+      end;
+    end;
   end;
 end;
 
@@ -204,10 +234,35 @@ end;
 
 procedure TDICEMainApp.InitApp;
 begin
-  InitSplashScreenInfo;
-  InitAboutBoxInfo;
-  InitMenuItemImage;
-  FWizardSettings.InitXMLSettings;
+  // Each part is protected separately, so an error in one of them doesn't stop the others.
+  // Messages View is not ready yet, logger keeps errors and shows them when IDE is loaded.
+  try
+    InitSplashScreenInfo;
+  except
+    on E: Exception do
+      FLogger.LogException('Error adding splash screen info', E);
+  end;
+
+  try
+    InitAboutBoxInfo;
+  except
+    on E: Exception do
+      FLogger.LogException('Error adding about box info', E);
+  end;
+
+  try
+    InitMenuItemImage;
+  except
+    on E: Exception do
+      FLogger.LogException('Error loading menu item image', E);
+  end;
+
+  try
+    FWizardSettings.InitXMLSettings;
+  except
+    on E: Exception do
+      FLogger.LogException('Error initializing settings', E);
+  end;
 end;
 
 procedure TDICEMainApp.InitSplashScreenInfo;
@@ -317,9 +372,15 @@ begin
 end;
 
 procedure TDICEMainApp.CreateAndInitSettingsForm;
+var
+  ThemingServices: IOTAIDEThemingServices;
 begin
   if not Assigned(FSettingsForm) then
   begin
+    // Form class must be registered before the form is created, so IDE applies its style to the form
+    if Supports(BorlandIDEServices, IOTAIDEThemingServices, ThemingServices) then
+      ThemingServices.RegisterFormClass(TfmWizardSettings);
+
     FSettingsForm := TfmWizardSettings.Create(nil);
     FFeatures.InitFeaturesControls(FSettingsForm);
     FSettingsForm.InitSectionsTree;
@@ -328,9 +389,26 @@ begin
   end;
 end;
 
+procedure TDICEMainApp.ApplyIDEThemeToSettingsForm;
+var
+  ThemingServices: IOTAIDEThemingServices;
+begin
+  // Called before each showing, because user can change IDE theme while the form exists.
+  // ApplyTheme sets colors of controls without style hooks (panels, labels, frames).
+  try
+    if Supports(BorlandIDEServices, IOTAIDEThemingServices, ThemingServices)
+        and ThemingServices.IDEThemingEnabled then
+      ThemingServices.ApplyTheme(FSettingsForm);
+  except
+    on E: Exception do
+      FLogger.LogException('Error applying IDE theme to settings form', E);
+  end;
+end;
+
 procedure TDICEMainApp.ShowModalSettingsForm;
 begin
   CreateAndInitSettingsForm;
+  ApplyIDEThemeToSettingsForm;
   FSettingsForm.ShowModal;
   FFeatures.SaveFeaturesSettings;
   FWizardSettings.FlushXMLSettings;

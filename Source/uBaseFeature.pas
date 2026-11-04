@@ -3,8 +3,8 @@ unit uBaseFeature;
 interface
 
 uses
-  Xml.XMLIntf, System.Variants,
-  uWizardSettings, uWizardLog, ufmWizardSettings;
+  Xml.XMLIntf, System.Variants, System.SysUtils, Vcl.StdCtrls, Vcl.Forms, Winapi.Windows,
+  uWizardConsts, uWizardSettings, uWizardLog, ufmWizardSettings;
 
 type
   TBaseFeature = class(TObject)
@@ -15,6 +15,9 @@ type
 
     function GetFeatureEnabled: Boolean; virtual;
     procedure SetFeatureEnabled(Value: Boolean); virtual; abstract;
+    // Switches feature by settings checkbox. If switching fails, checkbox is returned to the real
+    // state of the feature, so it doesn't show the wrong state next time the form is opened.
+    procedure ApplyCheckBoxState(ACheckBox: TCheckBox);
   public
     constructor CreateFeature(AWizardSettings: TWizardSettings; ALogger: TWizardLogger); virtual;
 
@@ -48,6 +51,26 @@ end;
 function TBaseFeature.GetFeatureEnabled: Boolean;
 begin
   Result := FFeatureEnabled;
+end;
+
+procedure TBaseFeature.ApplyCheckBoxState(ACheckBox: TCheckBox);
+var
+  ErrorMessage: string;
+begin
+  try
+    FeatureEnabled := ACheckBox.Checked;
+  except
+    on E: Exception do
+    begin
+      // Triggers OnClick again, but state is the same as feature state, so nothing is switched
+      ACheckBox.Checked := FeatureEnabled;
+
+      FLogger.LogException('Error switching feature ' + ClassName, E);
+      // Settings form is modal and covers Messages window, so error is also shown to user
+      ErrorMessage := 'Error switching "' + ACheckBox.Caption + '": ' + E.Message;
+      Application.MessageBox(PChar(ErrorMessage), PChar(WIZARD_NAME), MB_OK or MB_ICONERROR);
+    end;
+  end;
 end;
 
 procedure TBaseFeature.InitFeature;

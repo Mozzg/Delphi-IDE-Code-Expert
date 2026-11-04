@@ -3,9 +3,8 @@ unit uRemoveExplicitFeature;
 interface
 
 uses
-  Vcl.Dialogs, System.Classes, System.SysUtils, Vcl.Controls, Vcl.StdCtrls,
-  Vcl.Forms, Xml.XMLIntf, System.Variants,
-  uBaseFeature, uHooking, ufmWizardSettings, uWizardSettings, uFeatureCollection;
+  System.Classes, System.SysUtils, Vcl.Controls, Vcl.StdCtrls, Vcl.Forms,
+  uBaseFeature, uHooking, ufmWizardSettings, uFeatureCollection;
 
 type
   TRemoveExplicitPropertyFeature = class(TBaseFeature)
@@ -49,7 +48,7 @@ type
 
 procedure TRemoveExplicitPropertyFeature.SettingsCheckBoxClick(Sender: TObject);
 begin
-  FeatureEnabled := (Sender as TCheckBox).Checked;
+  ApplyCheckBoxState(Sender as TCheckBox);
 end;
 
 procedure TRemoveExplicitPropertyFeature.SetFeatureEnabled(Value: Boolean);
@@ -77,10 +76,14 @@ begin
     FSettingsCheckBox.OnClick := SettingsCheckBoxClick;
     FSettingsCheckBox.Checked := FeatureEnabled;
 
-    // Assinging parent to control
+    // Assigning parent to control
     ASettingsForm.AddSettingsControl('Global', FSettingsCheckBox);
   except
-    FreeAndNil(FSettingsCheckBox);
+    on E: Exception do
+    begin
+      FreeAndNil(FSettingsCheckBox);
+      FLogger.LogException('Error creating settings controls of feature ' + ClassName, E);
+    end;
   end;
 end;
 

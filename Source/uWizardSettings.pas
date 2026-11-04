@@ -91,7 +91,8 @@ begin
     FXMLDocSettings.SaveToFile(FSettingsFilePath);
   except
     on E: Exception do
-      raise Exception.Create('Error saving ' + WIZARD_HELP_MENU_CAPTION + ' settings, message: ' + E.Message);
+      // Settings form is already closed here, so error is shown in Messages window
+      FLogger.LogException('Error saving settings to ' + FSettingsFilePath, E);
   end;
 end;
 

@@ -4,7 +4,7 @@ interface
 
 uses
   Vcl.Forms, Vcl.StdCtrls, Vcl.ActnList, Vcl.Menus, System.Classes, System.SysUtils,
-  uBaseFeature, ufmWizardSettings, Vcl.Dialogs, uFeatureCollection;
+  uBaseFeature, ufmWizardSettings, uFeatureCollection;
 
 type
   TRemoveFormatShortcutFeature = class(TBaseFeature)
@@ -26,7 +26,7 @@ implementation
 
 procedure TRemoveFormatShortcutFeature.SettingsCheckBoxClick(Sender: TObject);
 begin
-  FeatureEnabled := (Sender as TCheckBox).Checked;
+  ApplyCheckBoxState(Sender as TCheckBox);
 end;
 
 procedure TRemoveFormatShortcutFeature.SetFeatureEnabled(Value: Boolean);
@@ -70,7 +70,7 @@ begin
   // before plugin is unloaded. If they are already destroyed when disabling, there is nothing to restore.
   if Assigned(FormatActionTogether) and Assigned(FormatActionPopup) then
   begin
-    // Changind shortcut
+    // Changing shortcut
     ShortCutTemp := FormatActionTogether.ShortCut;
     FormatActionTogether.ShortCut := FOldShortcut;
     FormatActionPopup.ShortCut := FOldShortcut;
@@ -112,10 +112,14 @@ begin
     FSettingsCheckBox.OnClick := SettingsCheckBoxClick;
     FSettingsCheckBox.Checked := FeatureEnabled;
 
-    // Assinging parent to control
+    // Assigning parent to control
     ASettingsForm.AddSettingsControl('Global', FSettingsCheckBox);
   except
-    FreeAndNil(FSettingsCheckBox);
+    on E: Exception do
+    begin
+      FreeAndNil(FSettingsCheckBox);
+      FLogger.LogException('Error creating settings controls of feature ' + ClassName, E);
+    end;
   end;
 end;
 

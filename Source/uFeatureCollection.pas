@@ -96,7 +96,15 @@ var
   Feature: TBaseFeature;
 begin
   for Feature in FFeatureList do
-    Feature.InitFeatureControls(ASettingsForm);
+  begin
+    // Error in one feature must not stop creating controls of the others
+    try
+      Feature.InitFeatureControls(ASettingsForm);
+    except
+      on E: Exception do
+        FLogger.LogException('Error creating settings controls of feature ' + Feature.ClassName, E);
+    end;
+  end;
 end;
 
 procedure TFeatureCollection.SaveFeaturesSettings;
@@ -106,11 +114,17 @@ var
 begin
   for Feature in FFeatureList do
   begin
+    // Error in one feature must not stop saving settings of the others
     try
-      FeatureSettings := FWizardSettings.GetXMLSettingsForFeature(Feature.ClassName);
-      Feature.WriteFeatureSettings(FeatureSettings);
-    finally
-      FeatureSettings := nil;
+      try
+        FeatureSettings := FWizardSettings.GetXMLSettingsForFeature(Feature.ClassName);
+        Feature.WriteFeatureSettings(FeatureSettings);
+      finally
+        FeatureSettings := nil;
+      end;
+    except
+      on E: Exception do
+        FLogger.LogException('Error saving settings of feature ' + Feature.ClassName, E);
     end;
   end;
 end;
