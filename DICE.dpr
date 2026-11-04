@@ -12,7 +12,6 @@ library DICE;
 {$I LibSuffixes.inc}
 
 uses
-  ShareMem,
   ToolsAPI,
   uWizardMain in 'Source\uWizardMain.pas',
   uWizardConsts in 'Source\uWizardConsts.pas',
@@ -24,7 +23,8 @@ uses
   ufmWizardSettings in 'Source\Forms\ufmWizardSettings.pas' {fmWizardSettings},
   uRemoveExplicitFeature in 'Source\uRemoveExplicitFeature.pas',
   uRemoveFormatShortcutFeature in 'Source\uRemoveFormatShortcutFeature.pas',
-  uWizardUtils in 'Source\uWizardUtils.pas';
+  uWizardUtils in 'Source\uWizardUtils.pas',
+  uWizardLog in 'Source\uWizardLog.pas';
 
 exports
   InitWizard name WizardEntryPoint;

@@ -75,7 +75,7 @@ begin
       on E: Exception do
       begin
         FreeAndNil(FeatureObject);
-        Application.MessageBox(PWideChar('Error creating feature of class ' + FeatureClass.ClassName), PWideChar(WIZARD_HELP_MENU_CAPTION));
+        TDICEMainApp.GetDICEMainApp.Logger.LogException('Error creating feature of class ' + FeatureClass.ClassName, E);
       end;
     end;
   end;
@@ -87,8 +87,14 @@ var
 begin
   for Feature in FFeatureList do
   begin
-    if Feature is TBaseFeature then
-      (Feature as TBaseFeature).InitFeature;
+    // Error in one feature must not stop initialization of the others
+    try
+      if Feature is TBaseFeature then
+        (Feature as TBaseFeature).InitFeature;
+    except
+      on E: Exception do
+        TDICEMainApp.GetDICEMainApp.Logger.LogException('Error initializing feature ' + Feature.ClassName, E);
+    end;
   end;
 end;
 

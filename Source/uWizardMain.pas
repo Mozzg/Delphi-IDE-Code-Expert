@@ -5,7 +5,7 @@ interface
 uses
   ToolsApi, System.SysUtils, Vcl.Forms, Vcl.Graphics, Winapi.Windows, System.Classes,
   Vcl.Menus,
-  uWizardConsts, uWizardSettings, uFeatureCollection, uWizardUtils;
+  uWizardConsts, uWizardSettings, uFeatureCollection, uWizardUtils, uWizardLog;
 
 type
   TDICEMainApp = class(TObject)
@@ -19,6 +19,7 @@ type
     FAboutInfoIndex: Integer;
     FWizardSettings: TWizardSettings;
     FFeatures: TFeatureCollection;
+    FLogger: TWizardLogger;
     FWizardVersion: TDICEVersionInfo;
 
     procedure InitSplashScreenInfo;
@@ -38,6 +39,7 @@ type
 
     property WizardSettings: TWizardSettings read FWizardSettings;
     property Features: TFeatureCollection read FFeatures;
+    property Logger: TWizardLogger read FLogger;
   end;
 
   TDICEWizard = class(TNotifierObject, IOTANotifier, IOTAWizard, IOTAMenuWizard)
@@ -131,6 +133,8 @@ var
 begin
   inherited Create;
 
+  // First of all, so other parts of the plugin can log their errors
+  FLogger := TWizardLogger.Create;
   FWizardSettings := TWizardSettings.Create;
   FFeatures := TFeatureCollection.Create;
 
@@ -163,6 +167,7 @@ begin
     AboutBoxIntf := nil;
   end;
   FreeAndNil(FMenuItemImage);
+  FreeAndNil(FLogger);
 
   TDICEMainApp.FPluginTerminated := True;
   inherited Destroy;
@@ -244,44 +249,65 @@ var
   ServicesIntf: INTAServices;
   i, DividerIndex: Integer;
 begin
-  if Supports(BorlandIDEServices, INTAServices, ServicesIntf) then
-    AppMainMenu := ServicesIntf.GetMainMenu
-  else
-    AppMainMenu := nil;
+  // IDE is loaded, messages logged before this moment can be shown now
+  FLogger.SetMessageViewReady;
 
-  if Assigned(AppMainMenu) then
-  begin
-    ToolsMenuItem := nil;
-    for i := 0 to AppMainMenu.Items.Count - 1 do
-      if AppMainMenu.Items[i].Name = 'ToolsMenu' then
-      begin
-        ToolsMenuItem := AppMainMenu.Items[i];
-        Break;
-      end;
+  // Each part is protected separately, so an error in one of them doesn't stop the others
+  try
+    if Supports(BorlandIDEServices, INTAServices, ServicesIntf) then
+      AppMainMenu := ServicesIntf.GetMainMenu
+    else
+      AppMainMenu := nil;
 
-    if Assigned(ToolsMenuItem) then
+    if Assigned(AppMainMenu) then
     begin
-      FDICEMenuItem := TMenuItem.Create(ToolsMenuItem);
-      FDICEMenuItem.Name := WIZARD_SETTINGS_MENU_ITEM_NAME;
-      FDICEMenuItem.Caption := WIZARD_SETTINGS_MENU_ITEM_CAPTION;
-      FDICEMenuItem.OnClick := OnClickWizardSettingsMenuItem;
+      ToolsMenuItem := nil;
+      for i := 0 to AppMainMenu.Items.Count - 1 do
+        if AppMainMenu.Items[i].Name = 'ToolsMenu' then
+        begin
+          ToolsMenuItem := AppMainMenu.Items[i];
+          Break;
+        end;
 
-      if Assigned(FMenuItemImage) then
-        FDICEMenuItem.ImageIndex := ServicesIntf.AddImage(WIZARD_ID_STRING + '.ICON', [FMenuItemImage]);
+      if Assigned(ToolsMenuItem) then
+      begin
+        FDICEMenuItem := TMenuItem.Create(ToolsMenuItem);
+        FDICEMenuItem.Name := WIZARD_SETTINGS_MENU_ITEM_NAME;
+        FDICEMenuItem.Caption := WIZARD_SETTINGS_MENU_ITEM_CAPTION;
+        FDICEMenuItem.OnClick := OnClickWizardSettingsMenuItem;
 
-      FirstDivider := ToolsMenuItem.Find('-');
-      if Assigned(FirstDivider) then
-        DividerIndex := FirstDivider.MenuIndex
+        if Assigned(FMenuItemImage) then
+          FDICEMenuItem.ImageIndex := ServicesIntf.AddImage(WIZARD_ID_STRING + '.ICON', [FMenuItemImage]);
+
+        FirstDivider := ToolsMenuItem.Find('-');
+        if Assigned(FirstDivider) then
+          DividerIndex := FirstDivider.MenuIndex
+        else
+          DividerIndex := 0;
+
+        ToolsMenuItem.Insert(DividerIndex, FDICEMenuItem);
+      end
       else
-        DividerIndex := 0;
-
-      ToolsMenuItem.Insert(DividerIndex, FDICEMenuItem);
+        FLogger.Log('Tools menu not found, settings menu item is not added');
+    end;
+  except
+    on E: Exception do
+    begin
+      FreeAndNil(FDICEMenuItem);
+      FLogger.LogException('Error adding settings menu item', E);
     end;
   end;
 
+  // Errors of single features are handled inside, other features are still created and initialized
   FFeatures.CreateAllFeatures(FWizardSettings);
   FFeatures.InitAllFeatures;
-  WizardSettings.CreateAndInitSettingsForm;
+
+  try
+    WizardSettings.CreateAndInitSettingsForm;
+  except
+    on E: Exception do
+      FLogger.LogException('Error creating settings form', E);
+  end;
 end;
 
 procedure TDICEMainApp.OnClickWizardSettingsMenuItem(Sender: TObject);

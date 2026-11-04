@@ -46,7 +46,7 @@ object fmWizardSettings: TfmWizardSettings
     Left = 0
     Top = 0
     Width = 664
-    Height = 136
+    Height = 367
     Align = alClient
     BevelOuter = bvNone
     TabOrder = 1
@@ -55,7 +55,7 @@ object fmWizardSettings: TfmWizardSettings
       Left = 3
       Top = 3
       Width = 190
-      Height = 130
+      Height = 361
       Align = alLeft
       Indent = 19
       ReadOnly = True
@@ -67,19 +67,9 @@ object fmWizardSettings: TfmWizardSettings
       Left = 199
       Top = 3
       Width = 462
-      Height = 130
+      Height = 361
       Align = alClient
       TabOrder = 1
     end
-  end
-  object memLog: TMemo
-    Left = 0
-    Top = 136
-    Width = 664
-    Height = 231
-    Align = alBottom
-    ScrollBars = ssBoth
-    TabOrder = 2
-    Visible = False
   end
 end

@@ -30,6 +30,9 @@ type
 
 implementation
 
+uses
+  uWizardMain;
+
 { TBaseFeature }
 
 constructor TBaseFeature.CreateFeature(WizardSettings: TWizardSettings);
@@ -54,6 +57,7 @@ begin
     ReadFeatureSettings(FeatureSettings);
   finally
     FeatureSettings := nil;
+    TDICEMainApp.GetDICEMainApp.Logger.Log('Feature ' + Self.ClassName + ' initialized');
   end;
 end;
 

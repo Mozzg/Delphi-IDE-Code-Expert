@@ -124,6 +124,7 @@ $(PreBuildEvent)]]></PreBuildEvent>
         <DCCReference Include="Source\uRemoveExplicitFeature.pas"/>
         <DCCReference Include="Source\uRemoveFormatShortcutFeature.pas"/>
         <DCCReference Include="Source\uWizardUtils.pas"/>
+        <DCCReference Include="Source\uWizardLog.pas"/>
         <None Include="jedi.inc"/>
         <None Include="LibSuffixes.inc"/>
         <BuildConfiguration Include="Base">
@@ -1007,7 +1008,7 @@ $(PreBuildEvent)]]></PreBuildEvent>
     <Import Project="$(APPDATA)\Embarcadero\$(BDSAPPDATABASEDIR)\$(PRODUCTVERSION)\UserTools.proj" Condition="Exists('$(APPDATA)\Embarcadero\$(BDSAPPDATABASEDIR)\$(PRODUCTVERSION)\UserTools.proj')"/>
     <Import Project="$(MSBuildProjectName).deployproj" Condition="Exists('$(MSBuildProjectName).deployproj')"/>
     <PropertyGroup Condition="'$(Config)'=='Debug' And '$(Platform)'=='Win32'">
-        <PreBuildEvent>call movedll.cmd $(OUTPUTPATH)</PreBuildEvent>
+        <PreBuildEvent>call movedll.cmd $(OUTPUTPATH)</PreBuildEvent>
         <PreBuildEventIgnoreExitCode>False</PreBuildEventIgnoreExitCode>
         <PreLinkEvent/>
         <PreLinkEventIgnoreExitCode>False</PreLinkEventIgnoreExitCode>
@@ -1015,7 +1016,7 @@ $(PreBuildEvent)]]></PreBuildEvent>
         <PostBuildEventIgnoreExitCode>False</PostBuildEventIgnoreExitCode>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Config)'=='Release' And '$(Platform)'=='Win32'">
-        <PreBuildEvent>call movedll.cmd $(OUTPUTPATH)</PreBuildEvent>
+        <PreBuildEvent>call movedll.cmd $(OUTPUTPATH)</PreBuildEvent>
         <PreBuildEventIgnoreExitCode>False</PreBuildEventIgnoreExitCode>
         <PreLinkEvent/>
         <PreLinkEventIgnoreExitCode>False</PreLinkEventIgnoreExitCode>

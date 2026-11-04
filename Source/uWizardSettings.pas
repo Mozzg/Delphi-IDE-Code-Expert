@@ -4,7 +4,7 @@ interface
 
 uses
   System.SysUtils, Xml.XMLDoc, Xml.XMLIntf, System.IOUtils, Winapi.Windows,
-  ufmWizardSettings, uWizardConsts;
+  ufmWizardSettings, uWizardConsts, uWizardUtils;
 
 type
   TWizardSettings = class(TObject)
@@ -47,11 +47,9 @@ begin
 end;
 
 function TWizardSettings.GetDLLPath: string;
-var
-  ModuleName: array[0..255] of WideChar;
 begin
-  GetModuleFileName(HInstance, @ModuleName[0], SizeOf(ModuleName));
-  Result := ModuleName;
+  // Directory of the plugin DLL, not the full file name
+  Result := ExtractFilePath(GetModuleFileNameCustom);
 end;
 
 procedure TWizardSettings.InitXMLSettings;
@@ -74,9 +72,18 @@ begin
     FXMLDocSettings.Options := [doNodeAutoCreate, doNodeAutoIndent, doAttrNull, doAutoSave];
     FXMLDocSettings.Encoding := 'UTF-8';
   except
-    FXMLDocSettings := nil;
-    FXMLDocSettings := NewXmlDocument;
-    FXMLDocSettings.Options := [doNodeAutoCreate, doNodeAutoIndent, doAttrNull, doAutoSave];
+    on E: Exception do
+    begin
+      TDICEMainApp.GetDICEMainApp.Logger.LogException('Error loading settings from ' + FSettingsFilePath
+          + ', default settings are used, file will be overwritten on next save', E);
+
+      // Root node is required, GetXMLSettingsForFeature works with DocumentElement
+      FXMLDocSettings := nil;
+      FXMLDocSettings := NewXmlDocument;
+      FXMLDocSettings.Options := [doNodeAutoCreate, doNodeAutoIndent, doAttrNull, doAutoSave];
+      FXMLDocSettings.Encoding := 'UTF-8';
+      FXMLDocSettings.AddChild('root');
+    end;
   end;
 end;
 
@@ -105,7 +112,7 @@ begin
     TDICEMainApp.GetDICEMainApp.Features.InitFeaturesControls(FSettingsForm);
     FSettingsForm.InitSectionsTree;
 
-    FSettingsForm.Log('Settings form created');
+    TDICEMainApp.GetDICEMainApp.Logger.Log('Settings form created');
   end;
 end;
 

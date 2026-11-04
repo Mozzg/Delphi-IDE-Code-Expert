@@ -14,7 +14,6 @@ type
     pnMain: TPanel;
     tvSections: TTreeView;
     pnFrameSettingsContainer: TPanel;
-    memLog: TMemo;
     procedure FormCreate(Sender: TObject);
     procedure FormDestroy(Sender: TObject);
     procedure tvSectionsChange(Sender: TObject; Node: TTreeNode);
@@ -29,11 +28,12 @@ type
   public
     procedure InitSectionsTree;
     procedure AddSettingsControl(const ASectionName: string; AControl: TControl);
-
-    procedure Log(const AMess: string);
   end;
 
 implementation
+
+uses
+  uWizardMain;
 
 {$R *.dfm}
 
@@ -129,20 +129,11 @@ begin
   AddControlToSection(Node, AControl);
 end;
 
-procedure TfmWizardSettings.Log(const AMess: string);
-begin
-  memLog.Lines.Add(AMess);
-end;
-
 procedure TfmWizardSettings.FormCreate(Sender: TObject);
 begin
   FFrameList := TObjectList.Create(False);
   Caption := WIZARD_SETTINGS_MENU_ITEM_CAPTION;
   Self.Icon.Handle := CreateIconFromBitmapRes('DICEABOUTHBMP');
-  {$IFDEF DEBUG}
-  memLog.Visible := True;
-  Self.Height := Self.Height + memLog.Height;
-  {$ENDIF}
 end;
 
 procedure TfmWizardSettings.FormDestroy(Sender: TObject);
