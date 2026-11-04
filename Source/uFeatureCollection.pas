@@ -3,9 +3,8 @@ unit uFeatureCollection;
 interface
 
 uses
-  System.Contnrs, System.SysUtils, System.Rtti, Vcl.Forms, Xml.XMLIntf,
-  Winapi.Windows,
-  uWizardConsts, uBaseFeature, uWizardSettings;
+  System.Contnrs, System.SysUtils, System.Rtti, Xml.XMLIntf, Winapi.Windows,
+  uWizardConsts, uBaseFeature, uWizardSettings, uWizardLog, ufmWizardSettings;
 
 type
   TFeatureCollection = class(TObject)
@@ -13,31 +12,32 @@ type
     class var FFeatureClassList: TClassList;
   private
     FFeatureList: TObjectList;
+    FWizardSettings: TWizardSettings;
+    FLogger: TWizardLogger;
   public
-    constructor Create;
+    constructor Create(AWizardSettings: TWizardSettings; ALogger: TWizardLogger);
     destructor Destroy; override;
 
     class procedure RegisterFeature(AFeatureClass: TClass);
 
-    procedure CreateAllFeatures(WizardSettings: TWizardSettings);
+    procedure CreateAllFeatures;
     procedure InitAllFeatures;
-    procedure InitFeaturesControls(ASettingsForm: TForm);
+    procedure InitFeaturesControls(ASettingsForm: TfmWizardSettings);
     procedure SaveFeaturesSettings;
     procedure FinalizeAllFeatures;
   end;
 
 implementation
 
-uses
-  uWizardMain;
-
 { TFeatureCollection }
 
-constructor TFeatureCollection.Create;
+constructor TFeatureCollection.Create(AWizardSettings: TWizardSettings; ALogger: TWizardLogger);
 begin
   inherited Create;
 
   FFeatureList := TObjectList.Create(True);
+  FWizardSettings := AWizardSettings;
+  FLogger := ALogger;
 end;
 
 destructor TFeatureCollection.Destroy;
@@ -52,7 +52,7 @@ begin
   FFeatureClassList.Add(AFeatureClass);
 end;
 
-procedure TFeatureCollection.CreateAllFeatures(WizardSettings: TWizardSettings);
+procedure TFeatureCollection.CreateAllFeatures;
 var
   FeatureClass: TClass;
   FeatureObject: TObject;
@@ -68,14 +68,14 @@ begin
 
     try
       RttiType := Context.GetType(FeatureClass);
-      RttiValue := RttiType.GetMethod('CreateFeature').Invoke(RttiType.AsInstance.MetaclassType, [WizardSettings]);
+      RttiValue := RttiType.GetMethod('CreateFeature').Invoke(RttiType.AsInstance.MetaclassType, [FWizardSettings, FLogger]);
       FeatureObject := RttiValue.AsObject;
       FFeatureList.Add(FeatureObject)
     except
       on E: Exception do
       begin
         FreeAndNil(FeatureObject);
-        TDICEMainApp.GetDICEMainApp.Logger.LogException('Error creating feature of class ' + FeatureClass.ClassName, E);
+        FLogger.LogException('Error creating feature of class ' + FeatureClass.ClassName, E);
       end;
     end;
   end;
@@ -93,12 +93,12 @@ begin
         (Feature as TBaseFeature).InitFeature;
     except
       on E: Exception do
-        TDICEMainApp.GetDICEMainApp.Logger.LogException('Error initializing feature ' + Feature.ClassName, E);
+        FLogger.LogException('Error initializing feature ' + Feature.ClassName, E);
     end;
   end;
 end;
 
-procedure TFeatureCollection.InitFeaturesControls(ASettingsForm: TForm);
+procedure TFeatureCollection.InitFeaturesControls(ASettingsForm: TfmWizardSettings);
 var
   Feature: TObject;
 begin
@@ -109,15 +109,12 @@ end;
 procedure TFeatureCollection.SaveFeaturesSettings;
 var
   Feature: TObject;
-  GlobalSettings: TWizardSettings;
   FeatureSettings: IXMLNode;
 begin
-  GlobalSettings := TDICEMainApp.GetDICEMainApp.WizardSettings;
-
   for Feature in FFeatureList do
   begin
     try
-      FeatureSettings := GlobalSettings.GetXMLSettingsForFeature(Feature.ClassName);
+      FeatureSettings := FWizardSettings.GetXMLSettingsForFeature(Feature.ClassName);
       (Feature as TBaseFeature).WriteFeatureSettings(FeatureSettings);
     finally
       FeatureSettings := nil;

@@ -4,43 +4,39 @@ interface
 
 uses
   System.SysUtils, Xml.XMLDoc, Xml.XMLIntf, System.IOUtils, Winapi.Windows,
-  ufmWizardSettings, uWizardConsts, uWizardUtils;
+  uWizardConsts, uWizardUtils, uWizardLog;
 
 type
+  // Storage of plugin settings in XML file. Settings form is managed by TDICEMainApp.
   TWizardSettings = class(TObject)
   private
-    FSettingsForm: TfmWizardSettings;
+    FLogger: TWizardLogger;
     FXMLDocSettings: IXMLDocument;
     FSettingsFilePath: string;
 
     function GetDLLPath: string;
   public
-    constructor Create;
+    constructor Create(ALogger: TWizardLogger);
     destructor Destroy; override;
 
     procedure InitXMLSettings;
     procedure FlushXMLSettings;
     function GetXMLSettingsForFeature(const AFeatureName: string): IXMLNode;
-    procedure CreateAndInitSettingsForm;
-
-    procedure ShowModalSettingsForm;
   end;
 
 implementation
 
-uses
-  uWizardMain;
-
 { TWizardSettings }
 
-constructor TWizardSettings.Create;
+constructor TWizardSettings.Create(ALogger: TWizardLogger);
 begin
   inherited Create;
+
+  FLogger := ALogger;
 end;
 
 destructor TWizardSettings.Destroy;
 begin
-  FreeAndNil(FSettingsForm);
   FXMLDocSettings := nil;
 
   inherited Destroy;
@@ -74,7 +70,7 @@ begin
   except
     on E: Exception do
     begin
-      TDICEMainApp.GetDICEMainApp.Logger.LogException('Error loading settings from ' + FSettingsFilePath
+      FLogger.LogException('Error loading settings from ' + FSettingsFilePath
           + ', default settings are used, file will be overwritten on next save', E);
 
       // Root node is required, GetXMLSettingsForFeature works with DocumentElement
@@ -102,26 +98,6 @@ end;
 function TWizardSettings.GetXMLSettingsForFeature(const AFeatureName: string): IXMLNode;
 begin
   Result := FXMLDocSettings.DocumentElement.ChildNodes.Nodes[AFeatureName];
-end;
-
-procedure TWizardSettings.CreateAndInitSettingsForm;
-begin
-  if not Assigned(FSettingsForm) then
-  begin
-    FSettingsForm := TfmWizardSettings.Create(nil);
-    TDICEMainApp.GetDICEMainApp.Features.InitFeaturesControls(FSettingsForm);
-    FSettingsForm.InitSectionsTree;
-
-    TDICEMainApp.GetDICEMainApp.Logger.Log('Settings form created');
-  end;
-end;
-
-procedure TWizardSettings.ShowModalSettingsForm;
-begin
-  CreateAndInitSettingsForm;
-  FSettingsForm.ShowModal;
-  TDICEMainApp.GetDICEMainApp.Features.SaveFeaturesSettings;
-  FlushXMLSettings;
 end;
 
 end.

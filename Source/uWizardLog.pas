@@ -7,8 +7,11 @@ uses
   uWizardConsts;
 
 type
+  TLogMessageKind = (lmkInfo, lmkError);
+
   // Writes plugin messages into own tab of IDE Messages window.
   // Messages logged before IDE is loaded are kept and written when message view becomes ready.
+  // In release build only errors are written, info messages are skipped.
   TWizardLogger = class(TObject)
   private
     FPendingMessages: TStringList;
@@ -19,7 +22,8 @@ type
     constructor Create;
     destructor Destroy; override;
 
-    procedure Log(const AMessage: string);
+    procedure Log(const AMessage: string; AKind: TLogMessageKind = lmkInfo);
+    procedure LogError(const AMessage: string);
     procedure LogException(const AContext: string; E: Exception);
     procedure SetMessageViewReady;
   end;
@@ -43,17 +47,27 @@ begin
   inherited Destroy;
 end;
 
-procedure TWizardLogger.Log(const AMessage: string);
+procedure TWizardLogger.Log(const AMessage: string; AKind: TLogMessageKind = lmkInfo);
 begin
+  {$IFDEF RELEASE}
+  if AKind = lmkInfo then
+    Exit;
+  {$ENDIF}
+
   if FMessageViewReady then
     WriteToMessageView(AMessage)
   else
     FPendingMessages.Add(AMessage);
 end;
 
+procedure TWizardLogger.LogError(const AMessage: string);
+begin
+  Log(AMessage, lmkError);
+end;
+
 procedure TWizardLogger.LogException(const AContext: string; E: Exception);
 begin
-  Log(AContext + ', ' + E.ClassName + ': ' + E.Message);
+  LogError(AContext + ', ' + E.ClassName + ': ' + E.Message);
 end;
 
 procedure TWizardLogger.SetMessageViewReady;
@@ -72,10 +86,6 @@ var
   MessageServices: IOTAMessageServices;
   MessageGroup: IOTAMessageGroup;
 begin
-  {$IFDEF RELEASE}
-  Exit;
-  {$ENDIF}
-
   try
     if Supports(BorlandIDEServices, IOTAMessageServices, MessageServices) then
     begin

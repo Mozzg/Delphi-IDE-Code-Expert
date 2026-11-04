@@ -5,9 +5,11 @@ interface
 uses
   ToolsApi, System.SysUtils, Vcl.Forms, Vcl.Graphics, Winapi.Windows, System.Classes,
   Vcl.Menus,
-  uWizardConsts, uWizardSettings, uFeatureCollection, uWizardUtils, uWizardLog;
+  uWizardConsts, uWizardSettings, uFeatureCollection, uWizardUtils, uWizardLog, ufmWizardSettings;
 
 type
+  // Plugin "application": creates all plugin objects and passes them their dependencies.
+  // Lower level units get what they need through constructors and don't call GetDICEMainApp.
   TDICEMainApp = class(TObject)
   private
     class var FPluginTerminated: Boolean;
@@ -18,6 +20,7 @@ type
     FDICEMenuItem: TMenuItem;  // Owned by IDE Tools menu, but freed by plugin on unload
     FAboutInfoIndex: Integer;
     FWizardSettings: TWizardSettings;
+    FSettingsForm: TfmWizardSettings;
     FFeatures: TFeatureCollection;
     FLogger: TWizardLogger;
     FWizardVersion: TDICEVersionInfo;
@@ -26,6 +29,8 @@ type
     procedure InitAboutBoxInfo;
     procedure InitMenuItemImage;
     procedure InitAfterIDELoad;
+    procedure CreateAndInitSettingsForm;
+    procedure ShowModalSettingsForm;
 
     procedure OnClickWizardSettingsMenuItem(Sender: TObject);
   public
@@ -135,8 +140,8 @@ begin
 
   // First of all, so other parts of the plugin can log their errors
   FLogger := TWizardLogger.Create;
-  FWizardSettings := TWizardSettings.Create;
-  FFeatures := TFeatureCollection.Create;
+  FWizardSettings := TWizardSettings.Create(FLogger);
+  FFeatures := TFeatureCollection.Create(FWizardSettings, FLogger);
 
   ModuleFileName := GetModuleFileNameCustom;
   if ModuleFileName <> EmptyStr then
@@ -154,10 +159,11 @@ begin
   // Menu first, so it can't be clicked while plugin is being destroyed
   FreeAndNil(FDICEMenuItem);
 
-  // Features must be rolled back and freed before settings, because settings form owns features controls
+  // Features must be rolled back and freed before settings form, because the form owns features controls
   if Assigned(FFeatures) then
     FFeatures.FinalizeAllFeatures;
   FreeAndNil(FFeatures);
+  FreeAndNil(FSettingsForm);
   FreeAndNil(FWizardSettings);
 
   try
@@ -288,7 +294,7 @@ begin
         ToolsMenuItem.Insert(DividerIndex, FDICEMenuItem);
       end
       else
-        FLogger.Log('Tools menu not found, settings menu item is not added');
+        FLogger.LogError('Tools menu not found, settings menu item is not added');
     end;
   except
     on E: Exception do
@@ -299,20 +305,40 @@ begin
   end;
 
   // Errors of single features are handled inside, other features are still created and initialized
-  FFeatures.CreateAllFeatures(FWizardSettings);
+  FFeatures.CreateAllFeatures;
   FFeatures.InitAllFeatures;
 
   try
-    WizardSettings.CreateAndInitSettingsForm;
+    CreateAndInitSettingsForm;
   except
     on E: Exception do
       FLogger.LogException('Error creating settings form', E);
   end;
 end;
 
+procedure TDICEMainApp.CreateAndInitSettingsForm;
+begin
+  if not Assigned(FSettingsForm) then
+  begin
+    FSettingsForm := TfmWizardSettings.Create(nil);
+    FFeatures.InitFeaturesControls(FSettingsForm);
+    FSettingsForm.InitSectionsTree;
+
+    FLogger.Log('Settings form created');
+  end;
+end;
+
+procedure TDICEMainApp.ShowModalSettingsForm;
+begin
+  CreateAndInitSettingsForm;
+  FSettingsForm.ShowModal;
+  FFeatures.SaveFeaturesSettings;
+  FWizardSettings.FlushXMLSettings;
+end;
+
 procedure TDICEMainApp.OnClickWizardSettingsMenuItem(Sender: TObject);
 begin
-  WizardSettings.ShowModalSettingsForm;
+  ShowModalSettingsForm;
 end;
 
 { TDICEWizard }

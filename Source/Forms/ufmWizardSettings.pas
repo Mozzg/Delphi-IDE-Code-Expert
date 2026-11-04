@@ -32,9 +32,6 @@ type
 
 implementation
 
-uses
-  uWizardMain;
-
 {$R *.dfm}
 
 function TfmWizardSettings.CreateIconFromBitmapRes(const AResName: string): HICON;

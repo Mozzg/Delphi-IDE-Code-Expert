@@ -17,7 +17,7 @@ type
   protected
     procedure SetFeatureEnabled(Value: Boolean); override;
   public
-    procedure InitFeatureControls(ASettingsForm: TForm); override;
+    procedure InitFeatureControls(ASettingsForm: TfmWizardSettings); override;
   end;
 
 implementation
@@ -66,7 +66,7 @@ begin
     FSettingsCheckBox.Checked := FFeatureEnabled;
 end;
 
-procedure TRemoveExplicitPropertyFeature.InitFeatureControls(ASettingsForm: TForm);
+procedure TRemoveExplicitPropertyFeature.InitFeatureControls(ASettingsForm: TfmWizardSettings);
 begin
   try
     FSettingsCheckBox := TCheckBox.Create(nil);
@@ -78,7 +78,7 @@ begin
     FSettingsCheckBox.Checked := FeatureEnabled;
 
     // Assinging parent to control
-    TfmWizardSettings(ASettingsForm).AddSettingsControl('Global', FSettingsCheckBox);
+    ASettingsForm.AddSettingsControl('Global', FSettingsCheckBox);
   except
     FreeAndNil(FSettingsCheckBox);
   end;
